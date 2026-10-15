@@ -31,6 +31,12 @@ concurrency:
 
 jobs:
   deploy:
+    # Pages exists on the upstream repository. Any other copy (a fork, a private
+    # mirror) has no Pages site unless its owner turns one on, and the deploy then
+    # fails at configure-pages on every push. There it publishes only when the
+    # repository variable PUBLISH_USER_DOCS is 'true' (Settings > Secrets and
+    # variables > Actions > Variables), set after enabling Pages.
+    if: github.repository == 'potatobeanradio/circuitRF' || vars.PUBLISH_USER_DOCS == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
