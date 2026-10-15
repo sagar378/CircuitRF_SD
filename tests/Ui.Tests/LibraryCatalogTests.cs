@@ -236,22 +236,24 @@ public class LibraryCatalogTests
     }
 
     [Fact]
-    public void ByCategory_Microstrip_ContainsAllEightBuiltIns()
+    public void ByCategory_Microstrip_ContainsAllNineBuiltIns()
     {
         // brief-L5a-pcell-contract-and-microstrip.md: MLIN/MBend/MTee/MCross are SymbolKind-
         // registered under the Microstrip category (previously reserved, unpopulated).
         // brief-mtaper-mklopf.md adds MTaper/MKlopf to the same family, and brief-via-component.md
-        // the two vias a board's lines change layers and return to ground through.
+        // the two vias a board's lines change layers and return to ground through, and MCurve the
+        // radiused bend.
         var kinds = LibraryCatalog.ByCategory(ComponentCategory.Microstrip).Select(i => i.Kind).ToList();
         Assert.Contains(SymbolKind.Mlin, kinds);
         Assert.Contains(SymbolKind.MBend, kinds);
+        Assert.Contains(SymbolKind.MCurve, kinds);
         Assert.Contains(SymbolKind.MTee, kinds);
         Assert.Contains(SymbolKind.MCross, kinds);
         Assert.Contains(SymbolKind.Mtaper, kinds);
         Assert.Contains(SymbolKind.Mklopf, kinds);
         Assert.Contains(SymbolKind.Via, kinds);
         Assert.Contains(SymbolKind.ViaGnd, kinds);
-        Assert.Equal(8, kinds.Count);
+        Assert.Equal(9, kinds.Count);
     }
 
     [Fact]

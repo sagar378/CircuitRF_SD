@@ -369,6 +369,41 @@ public sealed record PlanarFillSettings(
     public double ShallowImageCells { get; init; } = 0.5;
 
     /// <summary>
+    /// <b>LFE — what an EDGE port's source returns through.</b> <see cref="PlanarEdgePortReturn.SeriesGap"/>
+    /// (the default here, and every number recorded before LFE) is L8d's delta gap against the
+    /// floating outermost cell, whose series capacitance makes <c>a₂₁ ∝ ω</c> and amplifies every raw
+    /// error by <c>1/|a₂₁|²</c> at the bottom of a band. <see cref="PlanarEdgePortReturn.Ground"/>
+    /// is the true edge port: the port rooftop's charge on the outer cell is supplied by the source,
+    /// which returns through the ground plane, so <c>a₂₁</c> stays O(1) as ω → 0. See
+    /// <see cref="PlanarGroundedEdgePort"/>.
+    ///
+    /// <para><b>A FILL setting because it has to reach the DUT and every calibration standard
+    /// alike</b> — a standard whose port differed from the DUT's would make the error box a
+    /// measurement of a different object (D4). It changes no matrix entry: the fill, the cores and
+    /// the factorisation are untouched, and the change is an exact low-rank update applied at
+    /// excitation time.</para>
+    /// </summary>
+    public PlanarEdgePortReturn EdgePortReturn { get; init; } = PlanarEdgePortReturn.SeriesGap;
+
+    /// <summary>
+    /// <b>LFE — the frequency below which a <see cref="PlanarEdgePortReturn.Ground"/> port is
+    /// grounded</b>; at and above it the run uses the series gap. <c>+∞</c> (the default) grounds it
+    /// everywhere. <see cref="PlanarSolve"/> sets it to the run's QUASI-STATIC CROSSOVER on a
+    /// de-embedded run, because that crossover is by construction where the substrate is electrically
+    /// thin: below it the grounded port's box is a clean lumped section and the series gap's 1/f wall
+    /// is the problem; above it the grounded source — a vertical feed current — couples port to port
+    /// through substrate modes that the two-line γ cannot separate from the line (measured on 1.6 mm
+    /// FR-4 at 6 GHz: α 7.1 Np/m from the standards against 2.96 with the series gap), while the series
+    /// gap there is well conditioned. Carried on the fill settings so the DUT and every standard
+    /// switch at the same frequency.
+    /// </summary>
+    public double GroundedEdgePortBelowHz { get; init; } = double.PositiveInfinity;
+
+    /// <summary>Whether an edge port is grounded at <paramref name="fHz"/> under these settings.</summary>
+    public bool EdgePortGroundedAt(double fHz) =>
+        EdgePortReturn == PlanarEdgePortReturn.Ground && fHz < GroundedEdgePortBelowHz;
+
+    /// <summary>
     /// <b>M5 — non-null turns the AIM accelerator on for this mesh.</b> Null is the dense path, byte
     /// for byte: <see cref="PlanarSolveContext"/> builds the full O(N²) cores, fills, factors and
     /// back-substitutes exactly as L8c/L8d wrote it, and nothing on this object is read.

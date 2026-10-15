@@ -90,6 +90,7 @@ public static class BuiltInSymbols
     private static readonly Symbol _loadTuner     = BuildLoadTuner();
     private static readonly Symbol _mlin          = BuildMlin();
     private static readonly Symbol _mbend         = BuildMBend();
+    private static readonly Symbol _mcurve        = BuildMCurve();
     private static readonly Symbol _mtee          = BuildMTee();
     private static readonly Symbol _mcross        = BuildMCross();
     private static readonly Symbol _mtaper        = BuildMtaper();
@@ -206,6 +207,7 @@ public static class BuiltInSymbols
             case SymbolKind.Match:      return _match;
             case SymbolKind.Mlin:       return _mlin;
             case SymbolKind.MBend:      return _mbend;
+            case SymbolKind.MCurve:     return _mcurve;
             case SymbolKind.MTee:       return _mtee;
             case SymbolKind.MCross:     return _mcross;
             case SymbolKind.Mtaper:     return _mtaper;
@@ -1928,6 +1930,18 @@ public static class BuiltInSymbols
         Poly(false, -180,-25,  25,-25,  25,180,  -25,180,  -25,25,  -180,25),   // L-shaped body outline
         L(   0, 180,    0, 200),
     ], SymbolKind.MBend);
+
+    // MCurve — MBend's pins and arms, but the corner is a smooth quarter-annulus (two concentric
+    // curves) instead of an L with a corner: the glyph says "radiused bend" at a glance. Symbolic
+    // only; the instance's own Radius and Angle shape the artwork, not this outline.
+    private static Symbol BuildMCurve() => Sym([
+        L(-200,   0, -180,   0),
+        QC(-180,-25,   25,-25,   25,180),     // outer edge
+        L(  25, 180,  -25, 180),
+        QC( -25,180,  -25, 25, -180, 25),     // inner edge
+        L(-180,  25, -180,-25),
+        L(   0, 180,    0, 200),
+    ], SymbolKind.MCurve);
 
     // Through line (pins 1/2, left/right) + branch (pin 3, DOWN — +Y is down in this codebase) —
     // R-pc-3's own "pin 1 origin, through +X to pin 2, branch +Y to pin 3" convention. The body is

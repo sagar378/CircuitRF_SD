@@ -1043,6 +1043,14 @@
                                                           IsChecked="{Binding IsGroundReference}"
                                                           ToolTip.Tip="{x:Static lay:StackupCardText.GroundReferenceTip}"/>
                                             </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConductor}">
+                                                <TextBlock Text="Rough (µm):" Width="70" FontSize="11" VerticalAlignment="Center"
+                                                           ToolTip.Tip="RMS surface roughness of this copper, in microns; leave empty for a smooth conductor. Once the skin depth is comparable to it, the current follows the rough surface and the conductor loss rises, up to about double (Hammerstad-Bekkadal). It is applied in the planar and cross-section EM solvers (to this metal, and to the return plane's face when this is the return plane) and to MLIN and MCURVE through the technology. Foil datasheets state it as Rq or Rz; use the RMS (Rq) figure."/>
+                                                <TextBox Classes="cell compact" Width="60" Tag="Roughness"
+                                                         Text="{Binding StagedRoughnessUm}"
+                                                         ToolTip.Tip="RMS roughness in µm. Empty or 0 = smooth."
+                                                         LostFocus="OnFieldLostFocus" KeyDown="OnFieldKeyDown"/>
+                                            </StackPanel>
 
                                             <!-- MIM-6. The full-wave planar kernel solves a conductor
                                                  as a zero-thickness sheet, and this says which surface

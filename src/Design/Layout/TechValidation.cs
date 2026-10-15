@@ -247,6 +247,12 @@ public static class TechValidation
                 problems.Add(new(TechProblemArea.Stackup,
                     $"Stackup layer \"{sl.Name}\" is a conductor with non-positive conductivity ({sl.SigmaSm} S/m)."));
 
+            // Roughness is a non-negative length; null and 0 both mean a smooth conductor.
+            if (sl.RoughnessRmsM is { } rough && !(rough >= 0 && double.IsFinite(rough)))
+                problems.Add(new(TechProblemArea.Stackup,
+                    $"Stackup layer \"{sl.Name}\" has a surface roughness of {rough} m; RMS roughness is a " +
+                    "non-negative length (0 or unset for a smooth conductor)."));
+
             // Epsr == 0 is UNSET (GI2's skeleton spelling) and is summarised above; anything else
             // below 1 is a value someone entered that no material has.
             if (sl.Kind == StackupKind.Dielectric && sl.Epsr < 1 && !(stackupIsSkeleton && sl.Epsr == 0))

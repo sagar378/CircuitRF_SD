@@ -30,7 +30,7 @@ namespace CircuitRF.Design.Schematic;
 public static class MicrostripSubstrateInjection
 {
     private static readonly HashSet<SymbolKind> MicrostripKinds =
-        [SymbolKind.Mlin, SymbolKind.MBend, SymbolKind.MTee, SymbolKind.MCross,
+        [SymbolKind.Mlin, SymbolKind.MBend, SymbolKind.MCurve, SymbolKind.MTee, SymbolKind.MCross,
          SymbolKind.Mtaper, SymbolKind.Mklopf];
 
     public static bool IsMicrostripKind(SymbolKind kind) => MicrostripKinds.Contains(kind);
@@ -117,15 +117,23 @@ public static class MicrostripSubstrateInjection
 
         warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
 
-        return
-        [
-            new ParameterAssignment("H",     Fmt(substrate.HeightMeters)),
-            new ParameterAssignment("T",     Fmt(substrate.ThicknessMeters)),
-            new ParameterAssignment("Er",    Fmt(substrate.RelativePermittivity)),
-            new ParameterAssignment("Sigma", Fmt(substrate.ConductivitySPerM)),
-            new ParameterAssignment("TanD",  Fmt(substrate.LossTangent)),
-        ];
+        var overrides = new List<ParameterAssignment>
+        {
+            new("H",     Fmt(substrate.HeightMeters)),
+            new("T",     Fmt(substrate.ThicknessMeters)),
+            new("Er",    Fmt(substrate.RelativePermittivity)),
+            new("Sigma", Fmt(substrate.ConductivitySPerM)),
+            new("TanD",  Fmt(substrate.LossTangent)),
+        };
+        // The technology's copper roughness, only when it states one: a smooth technology's netlist is
+        // unchanged. An instance's OWN Roughness wins over this (NetExtractor drops the injected one).
+        if (substrate.RoughnessRmsMeters > 0)
+            overrides.Add(new(RoughnessParameter, Fmt(substrate.RoughnessRmsMeters)));
+        return overrides;
     }
+
+    /// <summary>The engine parameter MLIN and MCURVE read the RMS roughness from (metres).</summary>
+    public const string RoughnessParameter = "Roughness";
 
     private static string Fmt(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
@@ -324,6 +332,13 @@ public static class MicrostripSubstrateInjection
                 // MTaper's W2 is the narrow end; every other width is the 50 Ω line.
                 bool narrowEnd = kind == SymbolKind.Mtaper && p.Name == "W2";
                 value = ConvertMmTo(targetUnit, narrowEnd ? w100Mm!.Value : w50Mm.Value);
+            }
+            else if (kind == SymbolKind.MCurve && p.Name == "Radius" && w50Mm is not null)
+            {
+                // 3W, the low end of the effective-radius rule's published 3W-7W range: the tightest
+                // curve whose model is still inside its claim (MicrostripCurve), on THIS technology's
+                // own 50-ohm width rather than a radius carried over from the millimetre baseline.
+                value = ConvertMmTo(targetUnit, 3.0 * w50Mm.Value);
             }
             else if (p.Name == "L" && NiceLengthFor(targetUnit, kind) is { } nice)
             {

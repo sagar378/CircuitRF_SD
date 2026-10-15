@@ -16,7 +16,9 @@ namespace CircuitRF.Engine.Mom;
 /// one derivative and there is no way to take them apart again afterwards.</para>
 /// </param>
 /// <param name="SigmaSm">The surface's own conductivity, so each carries its own R_s.</param>
-public sealed record LossSurface(string Name, Mat<double> DLdn, double SigmaSm);
+/// <param name="RoughnessRmsM">The surface's RMS roughness, metres; zero is smooth and leaves R_s
+/// bit-identical. Per SURFACE, which is the one place a face-by-face roughness is exact here.</param>
+public sealed record LossSurface(string Name, Mat<double> DLdn, double SigmaSm, double RoughnessRmsM = 0.0);
 
 /// <summary>
 /// The frequency-independent per-unit-length model. <b>R-mom-11: [C], [C₀] and ∂L/∂n are
@@ -115,6 +117,8 @@ public sealed record RlgcModel(
         {
             if (double.IsPositiveInfinity(s.SigmaSm) || s.SigmaSm <= 0) continue;  // perfect metal
             double rs = Math.Sqrt(omegaRadS * EmConstants.Mu0 / (2.0 * s.SigmaSm));
+            // Roughness multiplies R_s (ConductorRoughness); a smooth surface skips it, bit for bit.
+            if (s.RoughnessRmsM > 0) rs *= ConductorRoughness.Factor(s.RoughnessRmsM, s.SigmaSm, omegaRadS);
             // `rs / Mu0 * DLdn`, in that association — NOT `(rs / Mu0) * DLdn` hoisted out of the
             // loop. Re-associating moves the single-conductor answer by one ulp, and C1's gate is
             // that it does not move at all.
@@ -232,7 +236,8 @@ public static class RlgcExtractor
             var recL    = Scale(Invert(recC0), EmConstants.Mu0 * EmConstants.Eps0);
             var dLdn    = Derivative(recL, l, delta);
 
-            surfaces.Add(new LossSurface($"conductor:{names[k]}", dLdn, problem.Conductors[k].SigmaSm));
+            surfaces.Add(new LossSurface($"conductor:{names[k]}", dLdn, problem.Conductors[k].SigmaSm,
+                                         problem.Conductors[k].RoughnessRmsM));
             if (dLdn[k, k] <= 0)
                 notes.Add($"∂L/∂n for receding conductor '{names[k]}' came out non-positive " +
                           $"({dLdn[k, k]:G4}) — receding metal must always increase that conductor's " +
@@ -248,7 +253,7 @@ public static class RlgcExtractor
             var gndC0 = RealPart(ChargeSolver.MaxwellCapacitance(gndMesh)); fills++;
             var gndL  = Scale(Invert(gndC0), EmConstants.Mu0 * EmConstants.Eps0);
             var dLdnGnd = Derivative(gndL, l, delta);
-            surfaces.Add(new LossSurface("ground", dLdnGnd, problem.Ground.SigmaSm));
+            surfaces.Add(new LossSurface("ground", dLdnGnd, problem.Ground.SigmaSm, problem.Ground.RoughnessRmsM));
             if (dLdnGnd[0, 0] <= 0)
                 notes.Add($"∂L/∂n for the ground-plane recession came out non-positive ({dLdnGnd[0, 0]:G4}).");
         }

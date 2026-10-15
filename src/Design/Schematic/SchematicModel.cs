@@ -104,6 +104,10 @@ public enum SymbolKind
     /// <summary>Microstrip bend (engine "MBEND"). 2-port, W/Angle/Mitered parameters.</summary>
     MBend,
 
+    /// <summary>Curved (radiused) microstrip bend (engine "MCURVE"). 2-port, W/Angle/Radius parameters;
+    /// Radius is the centre-line radius. Pins as MBend's: 1 left, 2 down.</summary>
+    MCurve,
+
     /// <summary>Microstrip T-junction (engine "MTEE"). 3-port, W1/W2/W3 parameters.</summary>
     MTee,
 

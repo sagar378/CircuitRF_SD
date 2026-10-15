@@ -99,6 +99,10 @@ public sealed partial class StackupLayerRowViewModel : ObservableObject
     [ObservableProperty] private string _stagedMur  = "";
     [ObservableProperty] private string _stagedSigmaSm = "";
 
+    /// <summary>The conductor's RMS surface roughness, in MICRONS (the unit foil datasheets state it
+    /// in); empty means smooth, which is what <see cref="StackupLayer.RoughnessRmsM"/> = null means.</summary>
+    [ObservableProperty] private string _stagedRoughnessUm = "";
+
     // ── The subtle mark on a field an EM run cannot use (owner, 2026-09-08) ────────────────────
     //
     // A Gerber import used to leave every substrate value at zero, and the only thing that said so was
@@ -638,6 +642,7 @@ public sealed partial class StackupLayerRowViewModel : ObservableObject
         StagedTanD           = Layer.TanD.ToString("0.######", Inv);
         StagedMur            = Layer.Mur.ToString("0.####", Inv);
         StagedSigmaSm        = Layer.SigmaSm.ToString("0.###e+0", Inv);
+        StagedRoughnessUm    = Layer.RoughnessRmsM is { } rough ? (rough * 1e6).ToString("0.###", Inv) : "";
         SelectedConductorMaterial = ConductorMaterials.Match(Layer.SigmaSm)?.Name ?? ConductorMaterials.Custom;
         // An unknown name shows as itself rather than as "(none)": the row must not claim a state
         // the file does not hold. check reports it (tech.material.unknown). The list is raised FIRST,
@@ -867,6 +872,20 @@ public sealed partial class StackupLayerRowViewModel : ObservableObject
         Layer.SigmaSm = v;
         _owner.CommitEdit(before, $"Set σ of {Layer.Name}");
         RaiseReadiness();
+    }
+
+    /// <summary>Empty or 0 clears the roughness (a smooth conductor, written as no key at all); a
+    /// negative or unreadable value reverts the field.</summary>
+    public void CommitRoughness()
+    {
+        double? m;
+        if (string.IsNullOrWhiteSpace(StagedRoughnessUm)) m = null;
+        else if (NumericText.TryParseDouble(StagedRoughnessUm, out var um) && um >= 0) m = um > 0 ? um * 1e-6 : null;
+        else { RefreshFromModel(); return; }
+        if (m == Layer.RoughnessRmsM) return;
+        var before = _owner.SnapshotJson();
+        Layer.RoughnessRmsM = m;
+        _owner.CommitEdit(before, $"Set surface roughness of {Layer.Name}");
     }
 
     partial void OnIsGroundReferenceChanged(bool value)

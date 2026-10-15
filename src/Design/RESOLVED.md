@@ -16731,3 +16731,43 @@ picture is now its wires and nothing else, which is what the 2D layout shows.
   (`WBondViewModel.PushExternalUndo`, bracketed by `LayoutEditorViewModel.Begin/EndExternalWireEdit`);
   before this it recorded no undo entry at all. The merge is in `src/Ui/WBond`, but the finding sits
   here beside the sync entry it follows from. Spec: wbond.md WB41a.
+
+## A planar run can model copper thickness; and a Z0 gap blamed on thickness was mostly the stack (2026-10-14)
+
+- **What was wrong.** The planar kernel's metal is a zero-thickness sheet, so a thick strip's sidewall
+  fringing capacitance is missing and Z0 reads high. `PlanarThicknessCorrection` adds an opt-in correction
+  (`.cem` `ConductorThicknessCorrection`, the EM panel's "Model copper thickness"). For each analysis level
+  it solves the width at which a sheet has the same Z0 as the real t-thick strip, using kernel A on the
+  technology's own stack. It then grows every outline by half that width per side, keeping port edges where
+  they are drawn.
+- **Why it ships OFF.** Turning it on changes the geometry of every planar run with thick copper, and the
+  pinned numbers of roughly eighty test files sit on the sheet geometry. Flipping the default is a separate
+  decision, as it was for conformal cells.
+- **Why kernel A, not Hammerstad-Jensen.** Kernel A gives the offset for any stack, including multilayer
+  and stripline-like ones. Kernel A cannot mesh a zero-thickness strip (Mom/CLAUDE.md's thin-strip trap),
+  so the reference sheet is t/20 thick. The Hammerstad-Jensen offset of that t/20 sheet is added back; it is
+  a few per cent of the answer.
+- **Why Z0 is matched, not C.** One width cannot match both C and ε_eff: the thick strip's sidewalls are
+  partly in air, so its ε_eff is lower. Z0 is the quantity that moves a match. The note reports both ε_eff
+  values.
+- **Traps.**
+  - A slot open at one end closes under growth with no change in ring count. The check is a morphological
+    closing (grow, then shrink back): any added area means a gap narrower than ΔW was filled.
+  - Two conductors that would merge would short two nets. Both cases are declined per level with a warning;
+    they are never applied.
+- **Measured** on a 25 µm-copper, 813 µm line (L 5/10 mm, 21 points, mesh 20 cells/λ and 3 edge cells):
+  - sheet as before: 54.35 Ω (ε_eff 2.410, line to line);
+  - corrected: 53.11 Ω (ε_eff 2.417);
+  - kernel A on the real 25 µm strip: 53.00 Ω;
+  - ΔW = 30.1 µm.
+
+  The correction agrees with the thick-metal cross-section to 0.2 %.
+- **The larger finding.** A 2.5D MoM with thick-conductor modelling, a 3D FEM and the closed-form models
+  all read 49.4–50.0 Ω for that line. The ~4.7 Ω gap had been attributed to the zero-thickness sheet;
+  thickness is only ~1.2 Ω of it.
+  - The rest is the STACK. Between Sig1 and the Sig5 return plane sit three copper layers that carry no
+    artwork. The planar extractor and kernel A both count them as dielectric at their stated thickness,
+    giving H = 367 µm.
+  - The external tools' closed-form substrate for the same build was H ≈ 330 µm (εr 2.97).
+  - Before blaming metal thickness for an impedance disagreement, compare the height between the line and
+    its return plane.

@@ -940,6 +940,8 @@ public sealed partial class EmSetupEditorViewModel : ObservableObject
     [ObservableProperty] private bool   _resonanceSearch;
     [ObservableProperty] private bool   _directVerticalKernel;
     [ObservableProperty] private bool   _acceleratedSolve;
+    [ObservableProperty] private bool   _conductorThicknessCorrection;
+    [ObservableProperty] private bool   _groundedEdgePorts = EmSetup.DefaultEdgePortReturn == PlanarEdgePortReturn.Ground;
     [ObservableProperty] private bool   _deembedOutsideCalibrationValidity;
     [ObservableProperty] private bool   _radiationPattern;
 
@@ -1602,6 +1604,29 @@ public sealed partial class EmSetupEditorViewModel : ObservableObject
         // kernel and the core cap rather than in the Surface-mesh group.
     }
 
+    partial void OnConductorThicknessCorrectionChanged(bool value)
+    {
+        if (_suppressCommit) return;
+        if (value == Working.ConductorThicknessCorrection) return;
+        var before = SnapshotJson();
+        Working.ConductorThicknessCorrection = value;
+        CommitEdit(before, "Change conductor-thickness correction");
+        // It changes the GEOMETRY the mesher is handed (each outline grows by its sheet-equivalent
+        // width), so unlike the solver options beside it this one does invalidate the mesh.
+        InvalidateMesh();
+    }
+
+    partial void OnGroundedEdgePortsChanged(bool value)
+    {
+        if (_suppressCommit) return;
+        var want = value ? PlanarEdgePortReturn.Ground : PlanarEdgePortReturn.SeriesGap;
+        if (want == Working.EdgePortReturn) return;
+        var before = SnapshotJson();
+        Working.EdgePortReturn = want;
+        CommitEdit(before, "Change edge-port return");
+        // A PORT choice, not a mesh one: the cells are the same either way, so no InvalidateMesh().
+    }
+
     partial void OnDeembedOutsideCalibrationValidityChanged(bool value)
     {
         if (_suppressCommit) return;
@@ -1792,6 +1817,8 @@ public sealed partial class EmSetupEditorViewModel : ObservableObject
         ResonanceSearch      = Working.ResonanceSearch;
         DirectVerticalKernel = Working.DirectVerticalKernel;
         AcceleratedSolve     = Working.AcceleratedSolve;
+        ConductorThicknessCorrection = Working.ConductorThicknessCorrection;
+        GroundedEdgePorts    = Working.EdgePortReturn == PlanarEdgePortReturn.Ground;
         DeembedOutsideCalibrationValidity = Working.DeembedOutsideCalibrationValidity;
         RadiationPattern     = Working.RadiationPattern;
         ReferenceInputPowerDbm = Working.ReferenceInputPowerDbm;

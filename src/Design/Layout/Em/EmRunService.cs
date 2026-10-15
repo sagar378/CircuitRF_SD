@@ -912,8 +912,13 @@ public static class EmRunService
                                     { ReferenceInputPowerDbm = setup.ReferenceInputPowerDbm },
                       }
                     : null,
-                Fill = setup.DirectVerticalKernel || setup.AcceleratedSolve
-                    ? fill
+                // LFE — the edge port's return reaches the DUT and every calibration standard
+                // through the fill settings (PlanarFillSettings.EdgePortReturn says why there). Only
+                // the SeriesGap spelling keeps the pre-LFE object, so that path stays the arithmetic
+                // it always was.
+                Fill = setup.DirectVerticalKernel || setup.AcceleratedSolve ||
+                       setup.EdgePortReturn != PlanarEdgePortReturn.SeriesGap
+                    ? fill with { EdgePortReturn = setup.EdgePortReturn }
                     : PlanarSolveSettings.Default.Fill,
                 // PCAL2 — `Deembed` is DELIBERATELY NOT SET from the setup any more, and the .cem
                 // field that used to set it is gone. It stays at the engine default (on). For an

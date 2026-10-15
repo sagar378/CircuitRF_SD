@@ -106,3 +106,6 @@ TK*.dll
 TK*.lib
 TK*.pdb
 /.vscode
+
+# Written by the passive-neighbour EM test run, not an input
+/testdata/portcal/results/

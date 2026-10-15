@@ -129,6 +129,12 @@ public static class PlanarExtractor
                 "and surface-wave loss along the flare, the end discontinuities, and coupling to " +
                 "nearby metal; the in-band transformation itself is what MicrostripTaperModel already " +
                 "computes, so close agreement there is confirmation rather than a wasted run."),
+            "MCURVE" => new PlanarAnalyticAlternative(subject, "MicrostripCurveModel",
+                "a radiused bend. MicrostripCurveModel treats it as the uniform line it nearly is, over " +
+                "the effective length (R - 0.2W) times the turn; what full-wave adds is the curvature " +
+                "itself (differential phase across the width, mode conversion), radiation, and coupling " +
+                "to nearby metal. Those matter on a tight bend (Radius below about 2W) and little on a " +
+                "gentle one, so on a gentle bend agreement is confirmation rather than a wasted run."),
             "MLIN" => new PlanarAnalyticAlternative(subject, "MicrostripLineModel",
                 "a uniform line. Its impedance, dispersion and loss are what MicrostripLineModel " +
                 "computes (Hammerstad-Jensen plus Kirschning-Jansen); what full-wave adds is the end " +
@@ -1378,6 +1384,12 @@ public static class PlanarExtractor
         var vias = BuildVias(viaShapes, regionViaPolys, levels, perDbu, notes, groundBand,
                              stack, planeMetal, FarMetal, polysByLevel);
 
+        // ── CONDUCTOR THICKNESS — the sheet-equivalent width (opt-in: .cem ConductorThicknessCorrection).
+        // After the vias, because a via that spans a level appends that level's metal above, and that
+        // copper is as thick as the rest of the level. See PlanarThicknessCorrection.
+        if (settings.ConductorThicknessCorrection)
+            ApplyThicknessCorrection(shapes, stack, levels, polysByLevel, groundTopM, perDbu, notes);
+
         // The conductor levels are built AFTER the vias, because a via that spans a level builds
         // that level's metal: see BuildVias' chain-through block, which appends the barrel's own
         // cross-section to `polysByLevel` for each level it passes. Nothing else here reorders — a
@@ -1390,7 +1402,8 @@ public static class PlanarExtractor
                 // A one-level problem keeps ZM UNSET, so it stays on L8's shipped path bit-for-bit
                 // (PlanarProblem.RequiresGeneralKernel). Naming the height is what turns the general
                 // kernel on, and it must only happen when there is something general to say.
-                levels.Count > 1 ? levelZ[i] : double.NaN);
+                levels.Count > 1 ? levelZ[i] : double.NaN,
+                levels[i].Layer.RoughnessRmsM ?? 0.0);
 
         // MIM-4 — a STRATIFIED medium turns the general kernel on even at one level. Before this
         // brief that case could not arise: a stratified region under the lowest level was refused at
@@ -1697,13 +1710,76 @@ public static class PlanarExtractor
     /// overview §5: whether Maxwell's equations include Ohm's law is not a decision to put in front
     /// of a user. The σ is the technology's, exactly as the signal metal's is.</para>
     /// </summary>
+    /// <summary>
+    /// Grows each analysis level's outlines by its sheet-equivalent width (see
+    /// <see cref="PlanarThicknessCorrection"/>), holding port edges, and says what it did per level —
+    /// or, per level, why it did not.
+    /// </summary>
+    private static void ApplyThicknessCorrection(
+        IReadOnlyList<LayoutShape> shapes, List<Band> stack, List<Band> levels,
+        List<PlanarPolygon>[] polysByLevel, double groundTopM, double perDbu, List<EmFinding> notes)
+    {
+        // Edge ports only: an internal (delta-gap) port names a point mid-conductor, not an edge.
+        var portPoints = shapes.OfType<LabelShape>()
+            .Where(l => l.IsPort && l.PortKind is null or PlanarPortKind.Edge)
+            .Select(l => new EmPoint(l.X * perDbu, l.Y * perDbu))
+            .ToList();
+        var dielectrics = stack
+            .Where(b => b.Layer.Kind == StackupKind.Dielectric)
+            .Select(b => (b.BottomM, b.TopM,
+                          new EmMaterial(b.Layer.Epsr, b.Layer.TanD, b.Layer.Mur <= 0 ? 1.0 : b.Layer.Mur)))
+            .ToList();
+        var regions = PlanarThicknessCorrection.RegionsFor(dielectrics, stack[0].BottomM, groundTopM, levels[^1].SheetM);
+
+        for (int i = 0; i < levels.Count; i++)
+        {
+            var band = levels[i];
+            double t = band.TopM - band.BottomM;
+            if (!(t > 0) || polysByLevel[i].Count == 0) continue;
+            string name = band.Layer.Name;
+
+            double w = PlanarThicknessCorrection.ReferenceWidth(polysByLevel[i], portPoints, out bool fromPorts);
+            if (!(w > 0)) continue;
+            var (cal, refusal) = PlanarThicknessCorrection.Calibrate(
+                regions, band.BottomM - groundTopM, band.TopM - groundTopM, band.SheetM - groundTopM, w);
+            if (cal is null)
+            {
+                notes.Add(EmFinding.Warn(
+                    $"The conductor-thickness correction was NOT applied on '{name}': {refusal}. That level " +
+                    "is solved as a zero-thickness sheet of the drawn width, which reads Z0 high."));
+                continue;
+            }
+
+            var (grown, decline, held) = PlanarThicknessCorrection.Grow(polysByLevel[i], cal.DeltaWM, portPoints);
+            if (grown is null)
+            {
+                notes.Add(EmFinding.Warn(
+                    $"The conductor-thickness correction was NOT applied on '{name}': {decline}. That level " +
+                    "is solved as a zero-thickness sheet of the drawn width, which reads Z0 high."));
+                continue;
+            }
+            polysByLevel[i] = [.. grown];
+
+            notes.Add(
+                $"Conductor thickness on '{name}' ({t * 1e6:G4} µm): the planar kernel's metal is a " +
+                $"zero-thickness sheet, so every outline on this level was grown by {cal.DeltaWM * 0.5e6:G4} µm " +
+                $"per side (ΔW = {cal.DeltaWM * 1e6:G4} µm){(held > 0 ? $", with the {held} port edge(s) held where drawn" : "")}. " +
+                $"ΔW is the width at which a sheet has the same Z0 as the real strip, solved with the 2-D " +
+                $"cross-section kernel at W = {w * 1e6:G5} µm ({(fromPorts ? "the port width" : "a typical width of the artwork")}): " +
+                $"the {t * 1e6:G4} µm strip reads {cal.Z0Thick:F2} Ω (ε_eff {cal.EeffThick:F3}), a sheet of the drawn " +
+                $"width {cal.Z0SheetDrawn:F2} Ω, and a sheet ΔW wider {cal.Z0Thick:F2} Ω (ε_eff {cal.EeffSheetCorrected:F3}). " +
+                "Gaps between conductors on this level are narrower by ΔW too, which stands in for the " +
+                "sidewall coupling of thick metal.");
+        }
+    }
+
     private static Termination FloorFor(Band? groundBand)
     {
         if (groundBand is null) return Termination.Pec;
         double sigma = groundBand.Layer.SigmaSm;
         double t     = groundBand.TopM - groundBand.BottomM;
         return sigma > 0 && !double.IsPositiveInfinity(sigma) && t > 0
-            ? Termination.LossyGround(sigma, t)
+            ? Termination.LossyGround(sigma, t, groundBand.Layer.RoughnessRmsM ?? 0.0)
             : Termination.Pec;
     }
 

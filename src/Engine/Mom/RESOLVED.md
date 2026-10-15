@@ -3,6 +3,134 @@
 Completed work's detail lands here instead of `CLAUDE.md`, which stays for durable, still-true
 conventions only. Same pattern as `src/Ui/DataDisplay/RESOLVED.md` and `src/Ui/Layout/Em/RESOLVED.md`.
 
+## LFE — the low-frequency wall was the edge PORT, and the grounded edge port removes it (2026-10-14)
+
+Owner report: on a 50 Ω laminate line (W 890.7 µm, 367 µm Sig1→Sig5, εᵣ 3.00) the planar MoM's error
+against a smooth line scaled as 1/f (|ΔS₁₁| 0.011 at 1 GHz, 0.004 at 3.5 GHz on 5 mm) and GREW with mesh
+refinement (port-corrected Zc at 1 GHz 53.9 / 52.0 / 52.8 Ω at 20/3, 60/5, 120/7 cells), while the
+reference planar tool, a 3D FEM and both closed forms were flat to < 0.5 Ω. The owner's hypothesis was
+the MPIE low-frequency breakdown, with an augmented EFIE or loop-star as the cure. **Measured, it is not
+that: the field solve is clean, and the whole error is the edge port.**
+
+### 1. The diagnosis, three measurements
+
+- **The run's own floor said so.** `DeembedErrorFloor` on the shipping series gap: 9.7e-3 at 1 GHz,
+  0.11 at 100 MHz, rising as 1/f and HIGHER on the fine mesh (1.2e-2 against 9.7e-3 at 1 GHz) — PEEL's
+  law and LFP §4's "refining is a net loss here" on this line. Port-free Zc collapsed to ~1 Ω and εeff to
+  1e-4 at 100 MHz.
+- **The field solve, with no de-embedding, is mesh-independent.** Internal (ground-referenced) ports at
+  both ends, a 5 + 10 mm port-free fit: Zc 51.77 / 51.74 Ω at 100 MHz and 51.44 / 51.41 Ω at 1 GHz on
+  20/3 and 120/7, εeff 2.4625, fit residual 1e-9. k·h_min there is ~1e-4; the loop current's round-off
+  is ~ε/(k·h)² ≈ 1e-8. Nothing to cure — so no augmented EFIE or loop-star was built, and per-band
+  automatic meshing (which would have made the LOW band COARSER) addresses a problem that is not there.
+- **The raw grounded edge port is a clean lumped box.** Fitted port-free on the RAW S: series −49.7 pH,
+  shunt 14.9 fF, flat from 0.1 to 6 GHz, residual 5e-9; raw |S₂₁| 0.9999 at 100 MHz against the series
+  gap's 1.4e-5. The reference tool's own port box on the same line fits to −46 pH and 19 fF.
+
+### 2. What was built
+
+- **`PlanarGroundedEdgePort`** — the true edge port HISTORY §D2 named ("a half-rooftop at the boundary
+  carrying the injected current"): every port rooftop's divergence pulse on the OUTER cell is removed,
+  so the charge the port moves is supplied by the source and returns through the ground plane. It is an
+  exact rank-2K update of Z (K = the port rooftops), applied by Woodbury against the factorisation Z
+  already has: the fill, the cores, the LDLᵀ and the accelerator are byte-for-byte unchanged and the K
+  columns of P come from the fill's own `PlanarPulsePotential`. Gated against Z′ built entry by entry
+  (6e-14), accelerated against dense (1.5e-13). Reached through `PlanarFillSettings.EdgePortReturn`, so
+  the DUT and every calibration standard take the same port (D4).
+- **`PlanarDeembed.SolveLumpedErrorBox`** — the general three-parameter box is ILL-CONDITIONED for a
+  nearly transparent port on the quasi-static path's short standards: its a₂₂ is a difference quotient
+  carrying γΔℓ (0.4° at 100 MHz), the one-parameter family the two standards cannot separate is a shift
+  of the reference plane, and an a₂₂ error of 0.03 is 3 Ω on a 50 Ω line. Measured: consistency residual
+  1e-2 → 0.37 across the band, published Zc 46.7 Ω. Solved instead as the series-Z / shunt-Y section the
+  raw fit shows it is, least squares over both standards' four measurements with γ and Z_c supplied.
+  Quasi-static path only; above the crossover the 60° standards keep the general solve.
+- **`PlanarDeembed.RenormalisePseudoWave`** — see §3.
+- **Grounded only BELOW the run's quasi-static crossover** (`PlanarFillSettings.GroundedEdgePortBelowHz`,
+  set by `PlanarSolve.Run`; a caller's lower bound wins). Above it the series gap, DUT and standards
+  together. Measured why: on 1.6 mm FR-4 at 6 GHz the grounded port's standards measured α = 7.1 Np/m
+  against 2.96 with the series gap — the grounded source (a vertical feed current) couples port to port
+  through substrate modes, which the two-line γ cannot separate from the line — while the series gap is
+  well conditioned there. The crossover is by construction where the substrate is electrically thin.
+- **A run with a coupled calibration GROUP falls back to the series gap**, with a note: PCAL4's modal
+  pre-peel was derived and measured on the series gap's a₂₁ ∝ ω and has not been re-measured here.
+- **k·h_min note** (`PlanarSolve.LowFrequencyBreakdownKh` = 3e-7, where the round-off reaches ~1e-3): the MPIE's own breakdown, named where
+  it could actually bite rather than where it was suspected.
+- **Defaults.** The ENGINE default stays `SeriesGap`, so every engine-level number in HISTORY.md is
+  reproducible and no engine test moved. The PRODUCT default (`EmSetup.EdgePortReturn`, `.cem`
+  `EdgePortReturn`, EM-panel "Ground-referenced edge ports") is `Ground`; `PlanarKernel.ModelRevision`
+  is bumped so a `.snp` stamped before reads as stale.
+
+### 3. A second, older defect the new port exposed: the renormalisation's wave convention
+
+`SolveErrorBox`'s cascade (and the lumped model) take a matched line to be `[[0, x], [x, 0]]` in its own
+reference, which is true of PSEUDO-waves normalised by √Z_c and false of power waves once Z_c is complex.
+`Renormalise` goes through `RFNetwork.SToS`, which is Kurokawa POWER waves. On a lossy line Z_c is complex
+through R/(jωL), most at the bottom of a band (51.29 − j0.47 Ω at 100 MHz here), and the mismatch reads
+as a reflection of order Im(Z_c)/Re(Z_c): the de-embedded 5 mm line published |S₁₁| = 9.7e-3 at 100 MHz
+against 3e-4 from the same box renormalised through Z with √Z on both sides. The grounded path uses
+`RenormalisePseudoWave`. **The series path keeps `Renormalise` bit for bit** — it is now the legacy
+spelling — so this defect is still in it; on a high-loss substrate it is worth |ΔS| ~ Im(Z_c)/Re(Z_c).
+
+### 4. Result on the owner's line (5 + 10 mm, port-free, sheet metal, CLI path)
+
+| | 0.1 GHz | 1 GHz | 6 GHz |
+|---|---|---|---|
+| series gap, 20/3 — Zc / εeff | 1.07 / 2e-4 | 51.05 / 2.390 | 51.22 / 2.429 |
+| series gap, 120/7 — Zc / εeff | 0.93 / 1e-4 | 50.39 / 2.312 | 51.44 / 2.435 |
+| grounded, 20/3 — Zc / εeff | 51.67 / 2.451 | 51.41 / 2.428 | 50.92 / 2.430 |
+| grounded, 120/7 — Zc / εeff | 51.72 / 2.457 | 51.40 / 2.429 | 51.02 / 2.436 |
+| floor (grounded 120/7) | 2.7e-5 | 7.4e-5 | 1.6e-3 |
+
+At 6 GHz the result moves ~0.4 Ω from the series gap's; the raw-solve port-free fit (50.93 Ω) agrees
+with the grounded value, so the series gap carried that error. The comparison against the reference
+planar tool on three structures is in the validation sheet (§5).
+
+### 4a. Three things tried and REJECTED on the measurement, so nobody re-derives them
+
+- **Per-frequency choice by the lower `DeembedErrorFloor`** (both raws come out of one factorisation,
+  since the series solve is the Woodbury intermediate). Built, measured, removed. On the owner's line at
+  6 GHz (120/7) it chose the series gap (floor 2.4e-4 against the grounded 1.6e-3) while the
+  calibration-free oracle — a port-free two-length fit on the RAW grounded solve, lumped-box residual
+  ≤ 6e-7 — read 50.99 Ω, the grounded port 51.02 Ω and the series gap 51.44 Ω: the series floor
+  under-predicted its own error ~20×. It also let two structures on one stack (a 5 mm and a 10 mm line)
+  switch port at different frequencies, which shows as a glitch in any two-length extraction.
+- **Refining γ inside the lumped fit** (a third unknown anchored to the quasi-static γ). The quasi-static
+  β is 0.4-1.1 % off a long-standard measurement on FR-4 at 0.2-0.95 of the crossover, which looked like
+  the grounded misfit's source; refining it left that misfit unchanged (2.9e-2 at 0.8× crossover), so
+  the source is the short standards' port-to-port coupling, and the third unknown was removed.
+- **Judging a de-embedded line against a long-standard series-gap "truth" at low frequency.** On the
+  laminate that truth published Zc ≈ 1 Ω at 0.49 GHz; only the raw-solve oracle (or internal ports) is
+  calibration-free. On FR-4 that oracle reads Zc 53.2-53.6 Ω and εeff 3.234 → 3.306 from 0.3 to 2.9 GHz,
+  and EVERY de-embedded variant drifts to Zc 56-57 Ω by 2.9 GHz — the published reference Z_c =
+  γ/(jωC_static) (PlanarKernel.QuasiStaticNote), common to both port types and larger on a thick
+  substrate than that note's "2 % at 5 GHz". Pre-existing; reported, not changed here.
+
+**The open edge, stated:** on a THICK substrate approaching its crossover the grounded port's floor
+rises (1.6 mm FR-4, coarse mesh: 2.6e-3 at 0.2×, 7.5e-3 at 0.4×, 2.9e-2 at 0.8× crossover) and the
+series gap would have been the better port there; on the owner's 367 µm laminate the grounded port
+matches the oracle across the whole 0.1-6 GHz band (0.37× crossover). A crossover rule that tracks
+that would need longer standards for the grounded port near the crossover, not a different selector.
+
+**A widened (PCAL3) standard keeps the series gap too.** The scoped Ui EM run found
+`PassiveNeighbourStandardTests.Gate1` publishing a non-passive file under the new default: on the committed
+`coupled-pair-passive` fixture the grounded port converges with the mesh (fixture mesh, auto, and 60 c/λ +
+5 edge cells all agree to 4e-4) to σ_max(S) = 1.0012 at 1 GHz and 1.0022-1.0024 at 1.75-3 GHz, while the
+series gap converges to a passive answer (|S₁₁| 0.136 vs 0.063 at 0.5 GHz). The lumped box is a one-mode
+fit; a standard carrying a floating neighbour beside the feed is a coupled pair driven on one conductor,
+which that box cannot describe, and PCAL3's own accuracy measurement was taken on the series gap. So
+`PlanarSolve.Run` now falls back to the series gap for every port when any port's standard carries a
+`Neighbourhood`, exactly as it already did for a calibration group, and says so in a note. Extending the
+grounded calibration to coupled standards is the same open item as groups.
+
+### 5. Gates
+
+`tests/Engine.Tests/Mom/GroundedEdgePortTests.cs`: G1 the Woodbury solve IS the modified system; G2 raw
+|S₂₁| at 100 MHz, grounded ~1 and series ~1e-5; G3 a synthetic lumped box is recovered and de-embeds a
+standard to the bare line (to 1e-9) at 0.1/1/6 GHz; G6 accelerated = dense; G8 a sweep across the crossover switches port type and stays continuous.
+Benchmark tier: G4 mesh invariance 0.1-2 GHz through the whole kernel, G4r its cheaper calibrator-path
+form; G5 the owner's line flat 0.1-6 GHz at 120/7 and the series gap not; G7 a via-bearing two-level
+near-thru reads as one (the series gap reads |S₂₁| 0.003 there).
+
 ## Two user-report fixes in the planar port and via refusals (2026-09-18)
 
 An experienced designer imported a two-layer reference board, pointed an EM setup at it, and
@@ -12049,3 +12177,26 @@ AGREE across the sweep. A pattern that is azimuthally symmetric at its peak (a z
 horizon is the peak) derives its axis from whichever azimuth the peak search lands on, which moves with
 frequency, so both are refused for the set with the existing "do not agree" sentence. That is correct — naming
 the cut is the remedy — but it will read as a bug on the first vertical radiator anyone runs.
+
+### Surface roughness reaches both EM kernels (2026-10-14)
+
+**What changed.** A conductor's RMS roughness (`StackupLayer.RoughnessRmsM`, null = smooth) now raises its
+surface impedance through `ConductorRoughness.Factor`. The factor calls the circuit models' own
+Hammerstad-Bekkadal correction (`MicrostripLoss.RoughnessFactor`), so MLIN, MCURVE and both EM kernels
+cannot disagree about what roughness does to copper. It reaches:
+- the planar sheet (`PlanarConductorLayer.RoughnessRmsM`, applied in `PlanarConductorLoss.SheetAt`);
+- the planar ground plane (`Termination.LossyGround`'s third argument, applied in `SurfaceImpedanceAt`);
+- kernel A, per surface (`EmConductor` / `EmGroundPlane` / `LossSurface`, applied to R_s in
+  `RlgcModel.RMatrix`).
+
+**Why the whole complex Z_s is scaled, not Re(Z_s) alone.** A smooth good conductor has R = ωL_int.
+Scaling R alone breaks that minimum-phase relation, which is the classic non-causal way to add roughness.
+
+**A smooth conductor is bit-identical.** Every site skips the multiply when the roughness is ≤ 0, and the
+provenance hashes append roughness only when it is set.
+
+**Not built, and the limits it leaves:**
+- The single sheet cannot tell a rough treated face from a smooth air-side face. One value covers both,
+  the same convention as the circuit models, so the loss is overstated when only one face is rough.
+- Hammerstad-Bekkadal saturates at 2×. Very rough foils exceed that, and Huray is the usual next model.
+- Palace runs do not read roughness yet: its conductivity boundary takes one σ for a whole sweep.

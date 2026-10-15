@@ -187,6 +187,8 @@ public sealed class PlanarSolveContext
         Ports    = ports;
         Levels   = levels;
         Settings = settings ?? PlanarFillSettings.Default;
+        foreach (var port in ports)
+            if (PlanarGroundedEdgePort.Applies(port)) { _hasGroundedEdgePort = true; break; }
 
         // R-fil-10, before the core allocates. The accelerator holds no N×N anything, so the DENSE
         // ceiling is the wrong question to ask of it — brief-em-aim-ceiling.md answered what the
@@ -254,11 +256,51 @@ public sealed class PlanarSolveContext
         if (_aimGeometry is not null)
         {
             LastAccelerator = PlanarAimOperator.Build(_aimGeometry.Value, k.VectorPotential, k.Scalar, omega);
-            return PlanarExcitation.Solve(LastAccelerator, Ports);
+            return Excite(LastAccelerator, () => SingleLevelPulse(_aimGeometry.Value.EntryCores, k.Scalar), omega);
         }
 
         var system = PlanarSystem.Build(Cores, k.VectorPotential, k.Scalar, omega);
-        return PlanarExcitation.Solve(system, Ports);
+        return Excite(system, () => SingleLevelPulse(EntryCores, k.Scalar), omega);
+    }
+
+    // ── LFE — the grounded edge port ───────────────────────────────────────────────────────────
+    //
+    // Every path below excites through here, so the DUT and every calibration standard take the
+    // same port (D4). With SeriesGap, or with no edge port on this mesh, it is the very call each
+    // path made before LFE.
+    private PlanarPortSolution Excite(IPlanarOperator op, Func<Func<int, int, Complex>> pulse, double omega)
+    {
+        if (!Settings.EdgePortGroundedAt(omega / (2.0 * Math.PI)) || !_hasGroundedEdgePort)
+            return PlanarExcitation.Solve(op, Ports);
+        return PlanarGroundedEdgePort.Solve(op, Mesh, Ports, pulse(), omega);
+    }
+
+    private readonly bool _hasGroundedEdgePort;
+
+    /// <summary>The frequency-independent class memo LFE's on-demand P reads on the DENSE path —
+    /// built once per mesh, on first use.</summary>
+    private PlanarEntryCores EntryCores => _entryCores ??= new PlanarEntryCores(Cores);
+    private PlanarEntryCores? _entryCores;
+
+    private static Func<int, int, Complex> SingleLevelPulse(PlanarEntryCores g, PlanarKernelTerms termsQ)
+    {
+        var pp = new PlanarPulsePotential(g, termsQ);
+        return pp.At;
+    }
+
+    private Func<int, int, Complex> MultiLevelPulse(PlanarEntryCores g, PlanarKernelSet set)
+    {
+        var pr = PlanarFill.MultiLevelPairings.Resolve(g.Cores, set, Levels!, g.Cores.Settings);
+        int layers = pr.TermsQ.GetLength(0);
+        var pulse = new PlanarPulsePotential?[layers, layers];
+        for (int la = 0; la < layers; la++)
+            for (int lb = la; lb < layers; lb++)
+                if (pr.TermsQ[la, lb] is { } t)
+                    pulse[la, lb] = pulse[lb, la] =
+                        new PlanarPulsePotential(g, t, pr.RemQ[la, lb], pr.ShallowQ[la, lb],
+                                                 pr.TermsQFar[la, lb], pr.RemQFar[la, lb]);
+        var cells = Mesh.Cells;
+        return (a, b) => pulse[cells[a].LayerIndex, cells[b].LayerIndex]!.At(a, b);
     }
 
     /// <summary>
@@ -295,14 +337,16 @@ public sealed class PlanarSolveContext
         // refusal was actually about. See PlanarAimBordered.cs's header.
         if (_aimGeometry is not null)
         {
+            var bset = kernel.Set!.For(Cores);
             LastBorderedAccelerator = PlanarBorderedAimOperator.Build(
-                _aimGeometry.Value, kernel.Set!.For(Cores), Levels, 2.0 * Math.PI * fHz);
-            return PlanarExcitation.Solve(LastBorderedAccelerator, Ports);
+                _aimGeometry.Value, bset, Levels, 2.0 * Math.PI * fHz);
+            return Excite(LastBorderedAccelerator, () => MultiLevelPulse(_aimGeometry.Value.EntryCores, bset),
+                          2.0 * Math.PI * fHz);
         }
 
-        var system = PlanarSystem.BuildMultiLevel(Cores, kernel.Set!.For(Cores), Levels,
-                                                  2.0 * Math.PI * fHz);
-        return PlanarExcitation.Solve(system, Ports);
+        var mset = kernel.Set!.For(Cores);
+        var system = PlanarSystem.BuildMultiLevel(Cores, mset, Levels, 2.0 * Math.PI * fHz);
+        return Excite(system, () => MultiLevelPulse(EntryCores, mset), 2.0 * Math.PI * fHz);
     }
 
     /// <summary>The raw s-parameters at the ports' own declared reference impedances.</summary>
@@ -777,9 +821,6 @@ public sealed class PlanarPortCalibrator
         _prevBeta = g.Beta;
         _prevF    = fHz;
 
-        var box = PlanarDeembed.SolveErrorBox(sShort, sLong, _shortLength,
-                                              _shortLength + _deltas[pick], g.Gamma, _prevA21);
-        _prevA21 = box.A21;
 
         // ── P2/M3 — the two standards' cores are already built; do not build them a second time ──
         //
@@ -809,6 +850,28 @@ public sealed class PlanarPortCalibrator
                                                     _standards[0].Settings,
                                                     _standards[0].Cores,
                                                     _standards[^1].Cores);
+
+        // LFE — a GROUNDED edge port's box is nearly transparent, so on the quasi-static path's short
+        // standards the general solve's a₂₂ is noise; it is solved as the lumped section it is
+        // (PlanarDeembed.SolveLumpedErrorBox says why). C_pul is therefore needed FIRST, which is why
+        // the block above moved ahead of the box — it never depended on the box.
+        var stdPort = _standards[0].Ports[0];
+        PlanarErrorBox box;
+        if (quasi && _standards[0].Settings.EdgePortGroundedAt(fHz) && PlanarGroundedEdgePort.Applies(stdPort))
+        {
+            box = PlanarDeembed.SolveLumpedErrorBox(sShort, sLong, _shortLength, _shortLength + _deltas[pick],
+                                                    g.Gamma,
+                                                    PlanarDeembed.CharacteristicImpedance(g.Gamma, _cPerMetre, fHz),
+                                                    stdPort.Z0);
+        }
+        else
+        {
+            box = PlanarDeembed.SolveErrorBox(sShort, sLong, _shortLength,
+                                              _shortLength + _deltas[pick], g.Gamma, _prevA21);
+            // The branch continuation belongs to the GENERAL box: a lumped box's a₂₁ is fixed by
+            // its own physics and must not seed or reset it.
+            _prevA21 = box.A21;
+        }
 
         return new PlanarPortCalibration(
             portNumber, g, box,
@@ -1453,6 +1516,13 @@ public sealed record PlanarSolveSettings(
 public static class PlanarSolve
 {
     /// <summary>
+    /// <b>LFE — below this k·h_min a run says the MPIE's low-frequency breakdown may be visible.</b>
+    /// The loop current is resolved to about 1e-16/(k·h)²; at 3e-7 that is ~1e-3, the level a
+    /// de-embedded |S| starts to show. Measured clean at k·h_min ≈ 1e-4 (100 MHz, 27 µm cells).
+    /// </summary>
+    public const double LowFrequencyBreakdownKh = 3e-7;
+
+    /// <summary>
     /// <b>PCAL4/R-pcal4-6 — refuse a calibration group whose modes the cascade eigenproblem cannot
     /// separate, at SETUP.</b> See <see cref="PlanarPortCalibrator.QuasiStaticModeSeparationDegrees"/>
     /// for why the question can be asked before a single frequency has been solved.
@@ -1948,6 +2018,28 @@ public static class PlanarSolve
 
         double fLo = freqs[0], fHi = freqs[^1];
 
+        // ── LFE — THE MPIE's OWN LOW-FREQUENCY BREAKDOWN, NAMED WHERE IT COULD BITE ───────────────
+        //
+        // The rooftop MPIE's vector term scales as ω and its scalar term as 1/ω, so the solenoidal
+        // (loop) part of the current is resolved only to about ε_machine/(k·h)², with h the smallest
+        // cell. Measured with ground-referenced ports and no de-embedding on a 5 mm laminate line, the
+        // solve is mesh-independent to 0.05 Ω at k·h_min ≈ 1e-4 (100 MHz, a 27 µm edge cell), so the
+        // wall the owner hit there was the PORT (see PlanarGroundedEdgePort), not this. It is real
+        // further down: at k·h_min = 3e-7 the loop current carries ~1e-3 of round-off, which a
+        // de-embedding then amplifies. A note rather than a refusal — the solve still runs, and the
+        // DC point and LF2's conduction substitute already cover the band below the fit's floor.
+        {
+            double hMin = double.PositiveInfinity;
+            foreach (var cell in mesh.Cells) hMin = Math.Min(hMin, Math.Min(cell.Width, cell.Height));
+            double kh = 2 * Math.PI * fLo * Math.Sqrt(Math.Max(1.0, slab.Material.EpsR)) / 299792458.0 * hMin;
+            if (kh < LowFrequencyBreakdownKh)
+                notes.Add($"At {SurfaceMesher.Eng(fLo)}Hz the smallest cell ({fmt(hMin)}) is only " +
+                          $"{kh:0.0e+0} of a radian of the wave long, where the full-wave solve resolves " +
+                          "the current's circulating part to roughly 1e-16/(k·h)² — so points this low " +
+                          "carry visible round-off. Coarsen the edge mesh or raise the sweep's lower " +
+                          "edge; the 0 Hz point is solved separately and is unaffected.");
+        }
+
         bool general = problem.RequiresGeneralKernel;
         var  levels  = general ? PlanarLevels.From(problem) : null;
 
@@ -2072,6 +2164,21 @@ public static class PlanarSolve
             ConductorLoss          = fillIn.PerfectConductor ? null
                                    : fillIn.ConductorLoss ?? PlanarConductorLoss.For(problem),
         };
+
+        // LFE — a de-embedded run grounds its edge ports below the quasi-static crossover only (see
+        // PlanarFillSettings.GroundedEdgePortBelowHz for the measurement that set the boundary). The
+        // calibrators' own plan asks the same crossover, so `quasi` and "grounded" coincide.
+        if (fillSt.EdgePortReturn == PlanarEdgePortReturn.Ground && st.Deembed)
+        {
+            var calStLfe = st.Calibration ?? PlanarCalibrationSettings.Default;
+            double cross = calStLfe.QuasiStaticBelowCrossover
+                ? PlanarCalibration.QuasiStaticCrossoverHz(slab) : 0.0;
+            fillSt = fillSt with
+            {
+                // A caller's own (lower) bound wins; the crossover is a ceiling, not a target.
+                GroundedEdgePortBelowHz = Math.Min(fillSt.GroundedEdgePortBelowHz, cross),
+            };
+        }
 
         var sw    = Stopwatch.StartNew();
         var dut   = new PlanarSolveContext(mesh, ports, fillSt, levels, slab.HeightM);
@@ -2290,6 +2397,44 @@ public static class PlanarSolve
 
             ports = widened;
             foreach (var pr in ports) if (pr.Group is not null) groupCount++;
+        }
+
+        // ── LFE — A CALIBRATION GROUP KEEPS THE SERIES GAP, AND SAYS SO ──────────────────────────
+        //
+        // PCAL4's modal calibration pre-peels a per-conductor SCALAR box off both standards before the
+        // cascade eigenproblem, and that pre-peel, its residuals and its sign rule were all derived and
+        // measured on the series gap's a₂₁ ∝ ω. The grounded port has not been through that measurement,
+        // so a run that forms a group falls back to the series gap for every port — one port type per
+        // run, because the DUT and every standard must share it (D4) — rather than ship an untested
+        // combination.
+        if (groupCount > 0 && fillSt.EdgePortReturn == PlanarEdgePortReturn.Ground)
+        {
+            fillSt = fillSt with { EdgePortReturn = PlanarEdgePortReturn.SeriesGap };
+            dut    = new PlanarSolveContext(mesh, dut.Ports, fillSt, levels, slab.HeightM);
+            notes.Add("Coupled ports are calibrated together as one group here, and the grouped " +
+                      "(modal) calibration supports only the series-gap edge port, so this run uses " +
+                      "the series gap for every port. Its de-embedding error grows as 1/f at the " +
+                      "bottom of the band; the DeembedErrorFloor result shows how much.");
+        }
+
+        // ── LFE — A STANDARD THAT REPRODUCES A NEIGHBOUR KEEPS THE SERIES GAP TOO ─────────────────
+        //
+        // The grounded port's lumped box is fitted to a SINGLE line: series Z, shunt Y and the line's
+        // own (γ, Zc). A PCAL3-widened standard carries a floating neighbour beside the feed, so the
+        // standard's line is a coupled pair driven on one conductor and the one-mode box cannot
+        // describe it. Measured on the committed coupled-pair-passive fixture: the grounded port
+        // converges with the mesh to a de-embedded σ_max(S) of 1.0012-1.0024 over 1-3 GHz, the series
+        // gap to a passive answer. PCAL3's accuracy measurement was taken on the series gap, so a run
+        // that widens any standard keeps it for every port (one port type per run, D4).
+        else if (fillSt.EdgePortReturn == PlanarEdgePortReturn.Ground &&
+                 ports.Any(p => p.Neighbourhood is not null))
+        {
+            fillSt = fillSt with { EdgePortReturn = PlanarEdgePortReturn.SeriesGap };
+            dut    = new PlanarSolveContext(mesh, dut.Ports, fillSt, levels, slab.HeightM);
+            notes.Add("A calibration standard here reproduces a neighbouring conductor beside the feed, " +
+                      "and that calibration supports only the series-gap edge port, so this run uses the " +
+                      "series gap for every port. Its de-embedding error grows as 1/f at the bottom of " +
+                      "the band; the DeembedErrorFloor result shows how much.");
         }
 
         foreach (var p in ports)
@@ -3057,6 +3202,7 @@ public static class PlanarSolve
                     if (ownStage) control?.TickStage();
                 }
 
+
                 // ── PCAL4 — the BLOCK peel, taken only when some port is in a group ──────────────
                 //
                 // R-pcal4-1: a run with no multi-conductor group must produce the bytes it produces
@@ -3107,7 +3253,13 @@ public static class PlanarSolve
                 // R-fed-2 — the lead comes off BEFORE renormalisation: "matched" means matched in
                 // Z_c, which is the reference Apply hands back and the one the section is uniform in.
                 var atZc = PlanarFeedExtension.Peel(PlanarDeembed.Apply(raw, boxes), peelM, gam);
-                s = PlanarDeembed.Renormalise(atZc, zc, z0);
+                // LFE — the box solves state S in the line's own PSEUDO-wave reference (a matched
+                // line reads [[0, x], [x, 0]]), so the grounded path renormalises in that convention.
+                // The series path keeps its pre-LFE arithmetic bit for bit; PlanarDeembed's own note
+                // on RenormalisePseudoWave records what that costs on a lossy line.
+                s = fillSt.EdgePortReturn == PlanarEdgePortReturn.Ground
+                    ? PlanarDeembed.RenormalisePseudoWave(atZc, zc, z0)
+                    : PlanarDeembed.Renormalise(atZc, zc, z0);
             }
             return (s, cals, sw.Elapsed.TotalMilliseconds);
         }
@@ -4270,6 +4422,13 @@ public static class PlanarSolve
                 solvedCount = solvedList.Length;
             }
         }
+
+        // LFE — say which edge port the sweep used, once, in a designer's terms, when it used both.
+        if (st.Deembed && fillSt.EdgePortReturn == PlanarEdgePortReturn.Ground &&
+            freqs.Length > 0 && freqs[^1] >= fillSt.GroundedEdgePortBelowHz && freqs[0] < fillSt.GroundedEdgePortBelowHz)
+            notes.Add($"Edge ports are ground-referenced below {SurfaceMesher.Eng(fillSt.GroundedEdgePortBelowHz)}Hz, " +
+                      "where the substrate is electrically thin and the series gap's de-embedding error " +
+                      "would grow as 1/f, and series gaps from there up.");
 
         return new PlanarSolveResult
         {

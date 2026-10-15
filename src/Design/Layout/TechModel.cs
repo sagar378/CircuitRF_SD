@@ -174,6 +174,18 @@ public sealed class StackupLayer
     // Conductor
     public double SigmaSm { get; set; }
 
+    /// <summary>
+    /// RMS surface roughness of this conductor's copper, metres, or null for a smooth conductor —
+    /// which is what every technology written before this field means, bit for bit. It raises the
+    /// conductor's surface impedance once the skin depth becomes comparable to it
+    /// (Hammerstad-Bekkadal, the correction the microstrip circuit models already use): in the planar
+    /// and cross-section EM kernels, on the return plane's own face, and — injected as the
+    /// <c>Roughness</c> parameter — on MLIN and MCURVE. Additive, nullable, no <c>.ctech</c>
+    /// <c>FormatVersion</c> bump (the <see cref="SheetAt"/> pattern). Meaningless (ignored) on a
+    /// non-Conductor entry.
+    /// </summary>
+    public double? RoughnessRmsM { get; set; }
+
     /// <summary>Which drawing layers map onto this stackup layer.</summary>
     public List<LayerKey> DrawingLayers { get; set; } = [];
 

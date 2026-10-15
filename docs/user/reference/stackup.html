@@ -1708,11 +1708,15 @@ which removes the entry.</p>
 <tbody>
 <tr>
 <td><strong>Thickness</strong></td>
-<td>The metal's thickness, in the display unit. Used by the cross-section kernel and by interchange; the full-wave planar kernel solves a zero-thickness sheet and uses this only to place it — see <a href="#ignored">What the EM engine does not read</a>.</td>
+<td>The metal's thickness, in the display unit. Used by the cross-section kernel and by interchange; the full-wave planar kernel solves a zero-thickness sheet and uses this only to place it — see <a href="#ignored">What the EM engine does not read</a> — unless the EM setup turns on <strong>Model copper thickness</strong>, which widens the sheet to match this thickness's Z₀ (<a href="em-setup.html#solver">EM setup</a>).</td>
 </tr>
 <tr>
 <td><strong>σ (S/m)</strong></td>
 <td>Conductivity at 20 °C. Sets conductor loss and skin depth in <strong>both</strong> EM kernels — on drawn metal, and on the <strong>ground reference</strong> layer, whose own σ becomes the loss of the infinite plane a microstrip returns through (about a fifth to a quarter of the conductor term; see <a href="mom-engine.html#ground-loss">the MoM engine</a>). A ground layer left at zero is a perfect plane, and the run's notes say so. The <strong>combo beside it</strong> is a shortcut that fills the box with a metal's bulk value (copper 5.8e7, silver 6.3e7, gold 4.1e7, aluminium 3.77e7, nickel 1.43e7); the box stays typeable and is what gets saved, and a value matching none of them reads as <em>Custom</em>.</td>
+</tr>
+<tr>
+<td><strong>Rough (µm)</strong></td>
+<td>RMS surface roughness of this copper, in microns. <strong>Empty is smooth</strong>, which is what every technology written before the field existed means. Once the skin depth is comparable to it, the current follows the rough surface and conductor loss rises, up to about double (the Hammerstad–Bekkadal correction). It is applied in <strong>both</strong> EM kernels — to this metal, and to the return plane's face when this is the ground reference — and to <strong>MLIN and MCURVE</strong> through the technology (a <code>Roughness</code> you type on the part itself wins). Use the foil's RMS (Rq) figure, not Rz. One value covers both faces of the metal, which overstates the loss when only the substrate side is treated.</td>
 </tr>
 <tr>
 <td><strong>Ground reference</strong></td>

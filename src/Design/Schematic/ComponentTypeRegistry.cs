@@ -676,6 +676,11 @@ public static class ComponentTypeRegistry
             Category: ComponentCategory.Microstrip,
             SearchTerms: ["MBEND", "microstrip bend", "bend", "corner", "miter"],
             ExtraCategories: [ComponentCategory.TransmissionLine]),
+        [SymbolKind.MCurve]        = new("MCURVE", "MCV",
+            Category: ComponentCategory.Microstrip,
+            SearchTerms: ["MCURVE", "microstrip curve", "curved bend", "radiused bend", "arc", "smooth bend",
+                          "bend", "radius"],
+            ExtraCategories: [ComponentCategory.TransmissionLine]),
         [SymbolKind.MTee]         = new("MTEE",  "MT",
             Category: ComponentCategory.Microstrip,
             SearchTerms: ["MTEE", "microstrip tee", "T-junction", "tee", "stub", "power divider"],
@@ -853,6 +858,10 @@ public static class ComponentTypeRegistry
             "The two terminals are interchangeable. One width and one angle describe the whole bend, "
           + "so the pins differ only in which way it turns on the canvas.",
 
+        SymbolKind.MCurve =>
+            "The two terminals are interchangeable. One width, one radius and one angle describe the "
+          + "whole curve, so the pins differ only in which way it turns on the canvas.",
+
         // ── Symmetric ALONE, and not once coupled ────────────────────────────
         // The dot convention, which is a property of the pair rather than of either inductor. It is
         // stated on all three because all three implement IInductiveBranch and any of them may be
@@ -999,6 +1008,7 @@ public static class ComponentTypeRegistry
         SymbolKind.LoadTuner     => "Tuner",
         SymbolKind.Mlin          => "MLIN",
         SymbolKind.MBend         => "MBEND",
+        SymbolKind.MCurve        => "MCURVE",
         SymbolKind.MTee          => "MTEE",
         SymbolKind.MCross        => "MCROSS",
         SymbolKind.Mtaper        => "MTAPER",
@@ -2627,6 +2637,16 @@ public static class ComponentTypeRegistry
                         new("Miter", "2",   "",    true, UnitDimension.None),
                         .. SignalGroundLayerParams];
 
+            // MCurve: radiused bend — W, Angle (deg, CCW from the input arm, as MBend's), Radius (the
+            // CENTRE-LINE radius). Radius defaults to 3W, the low end of the effective-radius rule's
+            // published 3W-7W range (MicrostripCurve); MicrostripSubstrateInjection keeps it 3x the
+            // technology's own 50-ohm width at placement.
+            case SymbolKind.MCurve:
+                return [new("W",      "2.9", "mm",  true, UnitDimension.Length),
+                        new("Angle",  "90",  "deg", true, UnitDimension.Angle),
+                        new("Radius", "8.7", "mm",  true, UnitDimension.Length),
+                        .. SignalGroundLayerParams];
+
             // MTee: microstrip T-junction — W1/W2 (through arms, may differ), W3 (branch), and each
             // arm's own drawn length L1/L2/L3. The lengths are ARTWORK only (MicrostripTeeModel has
             // no length term — the junction's reference planes are at the arm edges), but they must
@@ -2821,6 +2841,8 @@ public static class ComponentTypeRegistry
             case "VIAGND":   kind = SymbolKind.ViaGnd;       return true;
             case "MBEND":
             case "MB":       kind = SymbolKind.MBend;        return true;
+            case "MCURVE":
+            case "MCV":      kind = SymbolKind.MCurve;       return true;
             case "MTEE":
             case "MT":       kind = SymbolKind.MTee;         return true;
             case "MCROSS":

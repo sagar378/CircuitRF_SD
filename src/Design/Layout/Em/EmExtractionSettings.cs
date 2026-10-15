@@ -45,6 +45,11 @@ namespace CircuitRF.Design.Layout.Em;
 /// analysis level. Naming one overrides that FOR THIS RUN, without touching the shared technology,
 /// and the named conductor need not be ground-designated there.
 /// </param>
+/// <param name="ConductorThicknessCorrection">
+/// Grow each planar conductor outline by the sheet-equivalent width of its real copper thickness
+/// before meshing (<c>PlanarThicknessCorrection</c>). False — the default, and what every run before it
+/// existed did — leaves the artwork exactly as drawn. Read by the planar extractor only.
+/// </param>
 /// <param name="PortZ0s">
 /// R-cpl-6: explicit per-port reference impedances in D3 order (port 2k−1 is conductor k's near end,
 /// 2k its far end), overriding the near/far defaults. Null — the normal case — means every odd port
@@ -58,7 +63,8 @@ public sealed record EmExtractionSettings(
     string?    SubjectDescription = null,
     Complex[]? PortZ0s = null,
     string[]?  AnalysisLevelNames = null,
-    string?    GroundStackupLayerName = null)
+    string?    GroundStackupLayerName = null,
+    bool       ConductorThicknessCorrection = false)
 {
     public static readonly EmExtractionSettings Default = new();
 

@@ -2188,7 +2188,13 @@ public static class NetExtractor
 
             var substrateOverrides = MicrostripSubstrateInjection.BuildOverrides(
                 microstripTech, out var warning, signalOverride, groundOverride);
-            overrides2.AddRange(substrateOverrides);
+            // A Roughness the instance states itself is a deliberate per-part value and wins over the
+            // technology's.
+            bool ownRoughness = comp.Parameters.Any(p => p.Name == MicrostripSubstrateInjection.RoughnessParameter
+                                                         && !string.IsNullOrWhiteSpace(p.Expression));
+            overrides2.AddRange(ownRoughness
+                ? substrateOverrides.Where(o => o.Name != MicrostripSubstrateInjection.RoughnessParameter)
+                : substrateOverrides);
             if (warning is not null)
                 warningsOut?.Add($"{comp.InstanceName}: {warning}");
         }

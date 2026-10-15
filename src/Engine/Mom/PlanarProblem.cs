@@ -107,12 +107,16 @@ public sealed record PlanarPolygon(
 /// ZM is set must lie on an interface of <see cref="PlanarProblem.EffectiveStack"/> — see
 /// <see cref="PlanarProblem.CanSolve"/>.
 /// </param>
+/// <param name="RoughnessRmsM">RMS surface roughness of this level's metal, metres. Zero (the default)
+/// is a smooth conductor and reproduces the pre-roughness surface impedance bit for bit; otherwise
+/// <see cref="ConductorRoughness.Factor"/> multiplies the sheet's surface impedance.</param>
 public sealed record PlanarConductorLayer(
     string                        Name,
     IReadOnlyList<PlanarPolygon>  Polygons,
     double                        SigmaSm,
     double                        ThicknessM,
-    double                        ZM = double.NaN);
+    double                        ZM = double.NaN,
+    double                        RoughnessRmsM = 0.0);
 
 /// <summary>
 /// <b>L9c — a via: the metal that carries current from one conductor level to another.</b>

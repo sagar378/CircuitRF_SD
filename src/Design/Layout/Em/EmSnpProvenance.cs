@@ -345,6 +345,8 @@ public static class EmSnpProvenance
         foreach (var c in p.Conductors)
         {
             sb.Append("C:").Append(c.Name).Append(':').Append(R(c.SigmaSm)).Append(':');
+            // Roughness is appended only when set, so a smooth conductor's hash is unchanged.
+            if (c.RoughnessRmsM > 0) sb.Append("r").Append(R(c.RoughnessRmsM)).Append(':');
             foreach (var pt in c.Outline) sb.Append(R(pt.X)).Append(',').Append(R(pt.Y)).Append(';');
             sb.Append('|');
         }
@@ -353,6 +355,7 @@ public static class EmSnpProvenance
               .Append(R(r.Material.EpsR)).Append(':').Append(R(r.Material.TanD)).Append(':')
               .Append(R(r.Material.MuR)).Append('|');
         sb.Append("G:").Append(p.Ground is null ? "none" : R(p.Ground.Y) + ":" + R(p.Ground.SigmaSm));
+        if (p.Ground is { RoughnessRmsM: > 0 } g) sb.Append(":r").Append(R(g.RoughnessRmsM));
         return Sha(sb.ToString());
     }
 
@@ -394,8 +397,12 @@ public static class EmSnpProvenance
         // writing a kind unconditionally would change the hash of every stack that exists and
         // invalidate every cached .snp in every workspace to record nothing.
         if (p.Slab.Floor.Kind == TerminationKind.SurfaceImpedance)
+        {
             sb.Append(":g").Append(R(p.Slab.Floor.ConductivitySm)).Append(',')
               .Append(R(p.Slab.Floor.ThicknessM));
+            // Roughness only when set: a smooth floor hashes exactly as it did before roughness.
+            if (p.Slab.Floor.RoughnessRmsM > 0) sb.Append(",r").Append(R(p.Slab.Floor.RoughnessRmsM));
+        }
         sb.Append('|');
 
         // L9d — the general MEDIUM and each level's own z, or the answer changes with nothing the
@@ -419,8 +426,11 @@ public static class EmSnpProvenance
               .Append(R(ms.Top.Material.EpsR)).Append(':');
             foreach (var (t, which) in new[] { (ms.Bottom, 'b'), (ms.Top, 'u') })
                 if (t.Kind == TerminationKind.SurfaceImpedance)
+                {
                     sb.Append(which).Append(R(t.ConductivitySm)).Append(',')
                       .Append(R(t.ThicknessM)).Append(':');
+                    if (t.RoughnessRmsM > 0) sb.Append('r').Append(R(t.RoughnessRmsM)).Append(':');
+                }
             foreach (var ml in ms.Layers)
                 sb.Append(R(ml.ThicknessM)).Append(',').Append(R(ml.Material.EpsR)).Append(',')
                   .Append(R(ml.Material.TanD)).Append(',').Append(R(ml.Material.MuR)).Append(';');
@@ -440,7 +450,9 @@ public static class EmSnpProvenance
         {
             var layer = p.Layers[li];
             sb.Append("L:").Append(layer.Name).Append(':').Append(R(layer.SigmaSm)).Append(':')
-              .Append(R(layer.ThicknessM)).Append(':').Append(R(p.LevelZ(li))).Append('|');
+              .Append(R(layer.ThicknessM)).Append(':').Append(R(p.LevelZ(li)));
+            if (layer.RoughnessRmsM > 0) sb.Append(":r").Append(R(layer.RoughnessRmsM));
+            sb.Append('|');
             foreach (var poly in layer.Polygons)
             {
                 foreach (var pt in poly.Outer) sb.Append(R(pt.X)).Append(',').Append(R(pt.Y)).Append(';');

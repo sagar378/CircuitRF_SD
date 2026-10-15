@@ -100,6 +100,7 @@ public static class SymbolArtworkGenerator
         (SymbolKind.Match,           "match",             2),
         (SymbolKind.Mlin,            "mlin",              2),
         (SymbolKind.MBend,           "mbend",             2),
+        (SymbolKind.MCurve,          "mcurve",            2),
         (SymbolKind.MTee,            "mtee",              3),
         (SymbolKind.MCross,          "mcross",            4),
         (SymbolKind.Mtaper,          "mtaper",            2),

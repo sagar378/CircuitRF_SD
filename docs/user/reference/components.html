@@ -1187,6 +1187,40 @@ than as an ideal corner.</p>
 <tr><td>SignalLayer</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
 <tr><td>GroundReference</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
 </tbody></table>
+<h3 id="mcurve">Microstrip Curve (MCURVE)</h3>
+<figure class="symbol"><span class="frame">
+<span class="sym-light"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240" height="186" viewBox="0 0 240 186"><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M72.5 34.94L81.26 34.94" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M81.26 24Q171 24 171 113.74" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M171 113.74L149.11 113.74" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M149.11 113.74Q149.11 45.89 81.26 45.89" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M81.26 45.89L81.26 24" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M160.06 113.74L160.06 122.5" /><rect fill="none" stroke="#CE4A24" stroke-width="1" stroke-miterlimit="4" x="69" y="31.44" width="7" height="7" /><rect fill="none" stroke="#CE4A24" stroke-width="1" stroke-miterlimit="4" x="156.55" y="119" width="7" height="7" /><text fill="#6A8EF6" font-size="15" font-weight="600" font-family="IBM Plex Sans" x="89.63, 101.88, 111.51, 121.85, 131.8, 141.38" y="172.32">
+			MCURVE
+	</text></svg></span>
+<span class="sym-dark"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240" height="186" viewBox="0 0 240 186"><path fill="none" stroke="#9684FA" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M72.5 34.94L81.26 34.94" /><path fill="none" stroke="#9684FA" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M81.26 24Q171 24 171 113.74" /><path fill="none" stroke="#9684FA" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M171 113.74L149.11 113.74" /><path fill="none" stroke="#9684FA" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M149.11 113.74Q149.11 45.89 81.26 45.89" /><path fill="none" stroke="#9684FA" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M81.26 45.89L81.26 24" /><path fill="none" stroke="#9684FA" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M160.06 113.74L160.06 122.5" /><rect fill="none" stroke="#F07846" stroke-width="1" stroke-miterlimit="4" x="69" y="31.44" width="7" height="7" /><rect fill="none" stroke="#F07846" stroke-width="1" stroke-miterlimit="4" x="156.55" y="119" width="7" height="7" /><text fill="#8CAEFF" font-size="15" font-weight="600" font-family="IBM Plex Sans" x="89.63, 101.88, 111.51, 121.85, 131.8, 141.38" y="172.32">
+			MCURVE
+	</text></svg></span>
+</span><figcaption>MCURVE</figcaption></figure>
+<p>A radiused (curved) microstrip bend: width <code>W</code>, turn <code>Angle</code> (counter-clockwise positive, as MBEND's)
+and <code>Radius</code>, the <strong>centre-line</strong> radius. Where MBEND is a corner with a discontinuity, a curve has no
+corner — it is modelled as the line it nearly is, an MLIN of the same width over the effective length
+(R − 0.2·W)·|Angle|. The electrical path is a little shorter than the drawn centre line because the
+current favours the inner edge.</p>
+<p>That rule is published for Radius between 3W and 7W. Outside it the result is still computed and the
+run says it is an extrapolation; below 2W a bend is more than a change of length and the run tells you
+to EM-simulate it. A radius below W/2 cannot be drawn and is refused. The reference planes are the two
+ends of the arc, so an MCURVE butts straight onto an MLIN with no overlap to subtract. In layout it is
+drawn with true arc edges, which EM, DRC and the exporters flatten to the technology's own tolerance.</p>
+<table class="param-table">
+<thead><tr><th>Net</th><th>Terminal</th></tr></thead><tbody>
+<tr><td>1</td><td>1</td></tr>
+<tr><td>2</td><td>2</td></tr>
+</tbody></table>
+<p class="small">The nets of an instance line, in this order. The two terminals are interchangeable. One width, one radius and one angle describe the whole curve, so the pins differ only in which way it turns on the canvas.</p>
+<table class="param-table">
+<thead><tr><th>Name</th><th>Default</th><th>Unit</th><th>On schematic</th></tr></thead>
+<tbody>
+<tr><td>W</td><td><code>2.9</code></td><td>mm</td><td>shown</td></tr>
+<tr><td>Angle</td><td><code>90</code></td><td>deg</td><td>shown</td></tr>
+<tr><td>Radius</td><td><code>8.7</code></td><td>mm</td><td>shown</td></tr>
+<tr><td>SignalLayer</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>GroundReference</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+</tbody></table>
 <h3 id="mtee">Microstrip T-Junction (MTEE)</h3>
 <figure class="symbol"><span class="frame">
 <span class="sym-light"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240" height="186" viewBox="0 0 240 186"><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M32.45 34.94L41.2 34.94" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M198.8 34.94L207.55 34.94" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M120 113.74L120 122.5" /><path fill="none" stroke="#2D14C3" stroke-width="1.31" stroke-linecap="round" stroke-linejoin="round" d="M41.2 24L198.8 24L198.8 45.89L130.94 45.89L130.94 113.74L109.06 113.74L109.06 45.89L41.2 45.89L41.2 24Z" /><rect fill="none" stroke="#CE4A24" stroke-width="1" stroke-miterlimit="4" x="28.94" y="31.44" width="7" height="7" /><rect fill="none" stroke="#CE4A24" stroke-width="1" stroke-miterlimit="4" x="204.05" y="31.44" width="7" height="7" /><rect fill="none" stroke="#CE4A24" stroke-width="1" stroke-miterlimit="4" x="116.5" y="119" width="7" height="7" /><text fill="#6A8EF6" font-size="15" font-weight="600" font-family="IBM Plex Sans" x="100.52, 112.78, 121.48, 130.48" y="172.32">
@@ -1396,8 +1430,8 @@ most often left wrong — <code>IncludeCapacitance</code> and <code>er</code> �
 <thead><tr><th>Name</th><th>Default</th><th>Unit</th><th>On schematic</th><th>Meaning</th></tr></thead>
 <tbody>
 <tr><td>Arrays</td><td><code>G1</code></td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
-<tr><td>Source</td><td><code>Carried</code></td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
 <tr><td>File</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>WarnUnsynced</td><td><code>true</code></td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
 <tr><td>SymbolPitch</td><td><code>Loose</code></td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
 <tr><td>RefPin</td><td><code>false</code></td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
 <tr><td>IncludeCapacitance</td><td><code>true</code></td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
@@ -3873,6 +3907,7 @@ in the same multi-line editor as VAR. No fixed parameters.</p>
 <tr><td><a href="#match">Match</a></td><td>Match</td><td>Matching</td></tr>
 <tr><td><a href="#mlin">MLIN</a></td><td>Mlin</td><td>Microstrip</td></tr>
 <tr><td><a href="#mbend">MBEND</a></td><td>MBend</td><td>Microstrip</td></tr>
+<tr><td><a href="#mcurve">MCURVE</a></td><td>MCurve</td><td>Microstrip</td></tr>
 <tr><td><a href="#mtee">MTEE</a></td><td>MTee</td><td>Microstrip</td></tr>
 <tr><td><a href="#mcross">MCROSS</a></td><td>MCross</td><td>Microstrip</td></tr>
 <tr><td><a href="#mtaper">MTAPER</a></td><td>Mtaper</td><td>Microstrip</td></tr>

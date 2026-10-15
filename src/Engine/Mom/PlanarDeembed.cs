@@ -290,6 +290,133 @@ public static class PlanarDeembed
     }
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
+    // LFE — the error box of a GROUNDED edge port, as a lumped section
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    //
+    // SolveErrorBox above finds a GENERAL reciprocal box (three complex unknowns) from two standards
+    // whose lengths differ by Δℓ. Its a₂₂ comes from (m21b/x₂ − m21a/x₁)/(m21b·x₂ − m21a·x₁), a
+    // difference quotient whose information is ∝ (x₂² − x₁²), i.e. ∝ γΔℓ. With L8d's series gap that
+    // never mattered — a₂₂ sits near ±1 and the box's multiple reflections carry it — but a GROUNDED
+    // port is nearly transparent (|a₁₁|, |a₂₂| ~ 1e-2 on a 50 Ω line), and on the quasi-static path
+    // the standards are sized from the substrate rather than from λ, so βΔℓ is 0.4° at 100 MHz. a₂₂ is
+    // then noise, the one-parameter family the two short standards cannot separate is a SHIFT OF THE
+    // REFERENCE PLANE, and an a₂₂ error of 0.03 is a 3 Ω error in a de-embedded 50 Ω line. Measured:
+    // consistency residual 1e-2 at 100 MHz rising to 0.37 at 6 GHz, published Zc 46.7 Ω against
+    // 51.7 Ω from the same raw solve fitted independently.
+    //
+    // The raw grounded-port solve itself says what the box is: fitted with a port-free two-length
+    // model it is a series Z and a shunt Y — −49.7 pH and 14.9 fF at 100 MHz, −47.1 pH and 14.6 fF at
+    // 6 GHz — with a fit residual of 5e-9 to 9e-6. So the box is SOLVED AS THAT: two complex unknowns
+    // (series Z_s on the source side, shunt Y_p on the line side), least squares against all four
+    // measurements of both standards, with γ and Z_c supplied. The plane-shift family is not in the
+    // model (a lumped section has no length), which is the whole of what this buys, and the absolute
+    // misfit is published as the consistency residual — scaled by |a₁₁| so DeembedErrorFloor reads
+    // the misfit itself, in |ΔS|, as it does for the general box.
+    //
+    // Used only on the QUASI-STATIC path. Above the crossover the standards are sized to ~60° and the
+    // general solve is well conditioned, so the general solve keeps that half of the band and nothing
+    // there assumes the box is small against a wavelength.
+
+    /// <summary>
+    /// <b>LFE — the error box of a grounded edge port, solved as a lumped series-Z/shunt-Y
+    /// section</b> against two standards with γ and the line's Z_c supplied. The header above says
+    /// why the general solve cannot be used for it on short standards.
+    /// </summary>
+    /// <param name="z0">The raw reference impedance on the external (source) side.</param>
+    /// <param name="zc">The line's own Z_c — the internal side's reference, as in D7.</param>
+    public static PlanarErrorBox SolveLumpedErrorBox(
+        Mat<Complex> sShort, Mat<Complex> sLong, double lShortM, double lLongM,
+        Complex gamma, Complex zc, Complex z0)
+    {
+        Complex m11a = 0.5 * (sShort[0, 0] + sShort[1, 1]), m21a = 0.5 * (sShort[1, 0] + sShort[0, 1]);
+        Complex m11b = 0.5 * (sLong[0, 0]  + sLong[1, 1]),  m21b = 0.5 * (sLong[1, 0]  + sLong[0, 1]);
+        Complex[] meas = [m11a, m21a, m11b, m21b];
+
+        // Unknowns in normalised form, u = (Z_s/z0, Y_p·z0), so both sit near zero and are O(1) per
+        // unit of mismatch. The model is analytic in both, so a complex Gauss-Newton step with the
+        // Hermitian normal equations is the textbook least-squares iteration.
+        Complex u0 = Complex.Zero, u1 = Complex.Zero;
+        Complex[] Model(Complex a, Complex b)
+        {
+            var s1 = StandardS(a * z0, b / z0, gamma, zc, z0, lShortM);
+            var s2 = StandardS(a * z0, b / z0, gamma, zc, z0, lLongM);
+            return [s1.S11, s1.S21, s2.S11, s2.S21];
+        }
+
+        for (int it = 0; it < 40; it++)
+        {
+            var f0 = Model(u0, u1);
+            const double h = 1e-7;
+            var fa = Model(u0 + h, u1);
+            var fb = Model(u0, u1 + h);
+            Complex jaa = 0, jab = 0, jbb = 0, ga = 0, gb = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                Complex da = (fa[i] - f0[i]) / h, db = (fb[i] - f0[i]) / h, r = meas[i] - f0[i];
+                jaa += Complex.Conjugate(da) * da; jab += Complex.Conjugate(da) * db;
+                jbb += Complex.Conjugate(db) * db;
+                ga  += Complex.Conjugate(da) * r;  gb  += Complex.Conjugate(db) * r;
+            }
+            Complex det = jaa * jbb - jab * Complex.Conjugate(jab);
+            if (det.Magnitude < 1e-300) break;
+            Complex du0 = ( jbb * ga - jab * gb) / det;
+            Complex du1 = (-Complex.Conjugate(jab) * ga + jaa * gb) / det;
+            u0 += du0; u1 += du1;
+            if (du0.Magnitude + du1.Magnitude < 1e-15) break;
+        }
+
+        var fit = Model(u0, u1);
+        double misfit = 0;
+        for (int i = 0; i < 4; i++) misfit = Math.Max(misfit, (meas[i] - fit[i]).Magnitude);
+
+        var (a11, a21, a22) = LumpedBox(u0 * z0, u1 / z0, zc, z0);
+        double scale = Math.Max(a11.Magnitude, 1e-300);
+
+        // RejectedResidual carries the RIVAL's figure on the same scale: the general solve's own
+        // consistency, re-expressed as an absolute misfit over this box's |a₁₁|. A ratio near 1 says
+        // the two models agree about these standards; a large one is the ill-conditioning above.
+        var general = SolveErrorBox(sShort, sLong, lShortM, lLongM, gamma);
+        double rival = general.ConsistencyResidual * general.A11.Magnitude / scale;
+        return new PlanarErrorBox(a11, a22, a21, misfit / scale, rival);
+    }
+
+    /// <summary>The box [series Z_s, then shunt Y_p] as S with the external port referenced to
+    /// <paramref name="z0"/> and the internal one to <paramref name="zc"/>, in the √Z pseudo-wave
+    /// convention <see cref="Renormalise"/> (RFNetwork) uses — the one in which a matched line of
+    /// that Z_c reads [[0, x], [x, 0]], which is what <see cref="SolveErrorBox"/>'s cascade assumes.</summary>
+    internal static (Complex A11, Complex A21, Complex A22) LumpedBox(Complex zs, Complex yp, Complex zc, Complex z0)
+    {
+        Complex a = 1 + zs * yp, b = zs, c = yp, d = 1;
+        return AbcdToS(a, b, c, d, z0, zc) is var s ? (s.S11, s.S21, s.S22) : default;
+    }
+
+    private static (Complex S11, Complex S21, Complex S22) AbcdToS(
+        Complex a, Complex b, Complex c, Complex d, Complex z1, Complex z2)
+    {
+        Complex den = a * z2 + b + c * z1 * z2 + d * z1;
+        Complex s11 = (a * z2 + b - c * z1 * z2 - d * z1) / den;
+        Complex s22 = (-a * z2 + b - c * z1 * z2 + d * z1) / den;
+        Complex s21 = 2 * Complex.Sqrt(z1) * Complex.Sqrt(z2) / den;      // AD − BC = 1 (reciprocal)
+        return (s11, s21, s22);
+    }
+
+    /// <summary>A standard as the lumped model sees it: box, line of length ℓ, mirrored box, at
+    /// <paramref name="z0"/> on both ends.</summary>
+    private static (Complex S11, Complex S21) StandardS(Complex zs, Complex yp, Complex gamma,
+                                                        Complex zc, Complex z0, double lengthM)
+    {
+        Complex ch = Complex.Cosh(gamma * lengthM), sh = Complex.Sinh(gamma * lengthM);
+        // P = [1 Zs; 0 1]·[1 0; Yp 1],  L = line,  Q = [1 0; Yp 1]·[1 Zs; 0 1]
+        Complex pa = 1 + zs * yp, pb = zs, pc = yp, pd = 1;
+        Complex la = ch, lb = zc * sh, lc = sh / zc, ld = ch;
+        Complex qa = 1, qb = zs, qc = yp, qd = 1 + yp * zs;
+        Complex ta = pa * la + pb * lc, tb = pa * lb + pb * ld, tc = pc * la + pd * lc, td = pc * lb + pd * ld;
+        Complex a = ta * qa + tb * qc, b = ta * qb + tb * qd, c = tc * qa + td * qc, d = tc * qb + td * qd;
+        var s = AbcdToS(a, b, c, d, z0, z0);
+        return (s.S11, s.S21);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
     // The de-embedding itself — general P-port, one matrix solve
     // ══════════════════════════════════════════════════════════════════════════════════════════
 
@@ -964,6 +1091,28 @@ public static class PlanarDeembed
     /// The published answer: de-embedded S renormalised from each port's own Z_c to its declared
     /// reference impedance. <b>R-prt-9 — this is <c>RFNetwork.SToS</c> and nothing else.</b>
     /// </summary>
+    /// <summary>
+    /// <b>LFE — the same renormalisation, in the convention the de-embedding actually produces.</b>
+    /// <see cref="SolveErrorBox"/>'s cascade and <see cref="SolveLumpedErrorBox"/>'s model both take
+    /// the uniform line to be <c>[[0, x], [x, 0]]</c> in its own reference — which is true of
+    /// PSEUDO-waves normalised by √Z_c and false of power waves once Z_c is complex. So the S that
+    /// <see cref="Apply"/> hands back is a pseudo-wave S, and converting it with the power-wave
+    /// <see cref="Renormalise"/> (Kurokawa, through <c>RFNetwork.SToS</c>) reads Z_c's imaginary part
+    /// as a reflection of order Im(Z_c)/Re(Z_c). On a lossy line Z_c is complex because of R/(jωL),
+    /// most of all at the bottom of a band: measured on a 5 mm, 51.3 − j0.47 Ω laminate line at
+    /// 100 MHz the power-wave route published |S₁₁| = 9.7e-3 where the line has 3e-4.
+    ///
+    /// <para>This goes through Z with √Z on both sides (RFNetwork's own <c>SToZ</c>/<c>ZToS</c>, which
+    /// are the pseudo-wave pair), so it is exact for any complex Z_c and identical to
+    /// <see cref="Renormalise"/> whenever every Z_c and Z₀ is real.</para>
+    /// </summary>
+    public static Mat<Complex> RenormalisePseudoWave(Mat<Complex> sAtZc, IReadOnlyList<Complex> zc,
+                                                     IReadOnlyList<Complex> z0)
+    {
+        var z = RFNetwork.SToZ(sAtZc, [.. zc]);
+        return RFNetwork.ZToS(z, [.. z0]);
+    }
+
     public static Mat<Complex> Renormalise(Mat<Complex> sAtZc, IReadOnlyList<Complex> zc,
                                            IReadOnlyList<Complex> z0)
     {

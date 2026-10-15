@@ -82,7 +82,7 @@ public static class ComponentModelFactory
             // The JFET pair. Two types over one law, like the BJT's polarities: a channel type is a
             // sign, and a sign the symbol has to show.
             "JFET_N", "JFET_P",
-            "TLIN", "MLIN", "MBEND", "MTEE", "MCROSS", "MTAPER", "MKLOPF", "Chain",
+            "TLIN", "MLIN", "MBEND", "MCURVE", "MTEE", "MCROSS", "MTAPER", "MKLOPF", "Chain",
             // The two vias (brief-via-component.md): a signal via changing layers, and a via to ground.
             "VIA", "VIAGND",
             "ExtDevice", "wBond", "Match", "Mixer",
@@ -170,6 +170,8 @@ public static class ComponentModelFactory
             return CreateMicrostripLineModel(parameters);
         if (typeName.Equals("MBEND", StringComparison.OrdinalIgnoreCase))
             return CreateMicrostripBendModel(parameters);
+        if (typeName.Equals("MCURVE", StringComparison.OrdinalIgnoreCase))
+            return CreateMicrostripCurveModel(parameters);
         if (typeName.Equals("MTEE", StringComparison.OrdinalIgnoreCase))
             return CreateMicrostripTeeModel(parameters);
         if (typeName.Equals("MCROSS", StringComparison.OrdinalIgnoreCase))
@@ -2159,6 +2161,27 @@ public static class ComponentModelFactory
         string name = MicrostripInstanceName(parameters, "MBEND");
 
         return new MicrostripBendModel(w, angleDeg, miter, h, t, er, sigma, tanD, name);
+    }
+
+    // MCURVE: Radius is the CENTRE-LINE radius (SI metres). Angle arrives in RADIANS, exactly as TLIN's
+    // E does: the elaborator multiplies an authored "Angle=90 deg" by Units.Scale("deg") = pi/180, so
+    // it lands here as pi/2 and is converted back once, for the model's degree-valued API. (MBEND reads
+    // the same key without converting, which is harmless only because its electrical model ignores the
+    // angle; here the angle IS the electrical length.) The sign only steers the artwork.
+    private static MicrostripCurveModel CreateMicrostripCurveModel(IReadOnlyDictionary<string, Value> parameters)
+    {
+        double w = GetReal(parameters, "W", 0.0);
+        double angleDeg = GetReal(parameters, "Angle", Math.PI / 2.0) * 180.0 / Math.PI;
+        double radius = GetReal(parameters, "Radius", 0.0);
+        double h = GetReal(parameters, "H", DefaultSubstrateHMeters);
+        double t = GetReal(parameters, "T", DefaultSubstrateTMeters);
+        double er = GetReal(parameters, "Er", DefaultSubstrateEpsR);
+        double sigma = GetReal(parameters, "Sigma", DefaultSubstrateSigmaSPerM);
+        double tanD = GetReal(parameters, "TanD", DefaultSubstrateTanD);
+        double roughness = GetReal(parameters, "Roughness", 0.0);
+        string name = MicrostripInstanceName(parameters, "MCURVE");
+
+        return new MicrostripCurveModel(w, angleDeg, radius, h, t, er, sigma, tanD, name, roughness);
     }
 
     private static MicrostripTeeModel CreateMicrostripTeeModel(IReadOnlyDictionary<string, Value> parameters)

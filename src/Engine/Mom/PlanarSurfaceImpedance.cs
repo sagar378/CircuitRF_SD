@@ -325,7 +325,12 @@ public sealed class PlanarConductorLoss
                 "with the nearest level would report a plausible loss figure for the wrong metal.");
 
         var layer = _problem.Layers[layerIndex];
-        return PlanarSurfaceImpedance.Sheet(layer.SigmaSm, layer.ThicknessM, omegaRadS);
+        var zs = PlanarSurfaceImpedance.Sheet(layer.SigmaSm, layer.ThicknessM, omegaRadS);
+        // Roughness scales the whole complex Z_s (ConductorRoughness' header says why). A smooth level
+        // skips the multiply, so its Z_s is the pre-roughness value bit for bit.
+        return layer.RoughnessRmsM > 0
+            ? zs * ConductorRoughness.Factor(layer.RoughnessRmsM, layer.SigmaSm, omegaRadS)
+            : zs;
     }
 
     /// <summary>

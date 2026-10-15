@@ -646,6 +646,24 @@ than as an ideal corner.
 
 {{table: components/MBend}}
 
+### Microstrip Curve (MCURVE) {#mcurve}
+
+{{symbol: mcurve}}
+
+A radiused (curved) microstrip bend: width `W`, turn `Angle` (counter-clockwise positive, as MBEND's)
+and `Radius`, the **centre-line** radius. Where MBEND is a corner with a discontinuity, a curve has no
+corner — it is modelled as the line it nearly is, an MLIN of the same width over the effective length
+(R − 0.2·W)·|Angle|. The electrical path is a little shorter than the drawn centre line because the
+current favours the inner edge.
+
+That rule is published for Radius between 3W and 7W. Outside it the result is still computed and the
+run says it is an extrapolation; below 2W a bend is more than a change of length and the run tells you
+to EM-simulate it. A radius below W/2 cannot be drawn and is refused. The reference planes are the two
+ends of the arc, so an MCURVE butts straight onto an MLIN with no overlap to subtract. In layout it is
+drawn with true arc edges, which EM, DRC and the exporters flatten to the technology's own tolerance.
+
+{{table: components/MCurve}}
+
 ### Microstrip T-Junction (MTEE) {#mtee}
 
 {{symbol: mtee}}

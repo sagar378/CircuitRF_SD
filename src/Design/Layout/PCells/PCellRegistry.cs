@@ -18,6 +18,7 @@ public static class PCellRegistry
         {
             { "MLIN",   MlinPCell.Generate   },
             { "MBEND",  MBendPCell.Generate  },
+            { MCurvePCell.GeneratorId, MCurvePCell.Generate },
             { "MTEE",   MTeePCell.Generate   },
             { "MCROSS", MCrossPCell.Generate },
             { "MTAPER", MTaperPCell.Generate },

@@ -474,6 +474,43 @@ L-C-L data exists for the true Douville-James optimal percentage specifically; t
 via a runtime warning naming it an approximation, per this document's own §4/R15 "each case gated
 separately, nothing silently falls through" convention, not left implicit).
 
+### 10.5 MCurve — the radiused bend, as a line over an effective length
+
+`MCURVE` (`MicrostripCurveModel`, artwork `MCurvePCell`) is a continuously curved bend: width `W`, turn
+`Angle`, and `Radius` — the **centre-line** radius. It is deliberately *not* a discontinuity model.
+Poole & Darwazeh eq (26) (the lecture §4's MBend coefficients come from) states that once the bend
+radius exceeds about **2·W** the dominant parasitic of a curved bend is a change in effective length, and
+that for **3 < R/W < 7** the effective radius is **`R_eff = R_inner + 0.3·W`**, i.e.
+**`R_eff = R − 0.2·W`** — the electrical path is shorter than the drawn centre line because the current
+favours the inner edge (brief-mtaper-mklopf.md R-bnd-5). So MCURVE is MLIN — the same object, not a second
+copy of its physics — over **`(R − 0.2·W)·|Angle|`**. Deeper treatment: Weisshaar et al., *Modeling of
+radial microstrip bends*, IEEE MTT-S 1990, pp. 1051–1054.
+
+- **Validity (§3's convention).** Inside 3W–7W nothing is reported. 2W–3W and above 7W are computed and
+  reported as extrapolations (above 7W the source says the correction shrinks further; 0.2W is then at
+  most 3 % of R). **Below 2W** the run says the bend is more than a length change and to EM-simulate it.
+  **Below W/2** the inner edge would cross the centre of curvature: refused, naming the bound; so is a
+  turn past 360°.
+- **Reference planes** are the two ends of the arc, so an MCURVE abuts an MLIN with nothing to subtract —
+  unlike MBend, whose L-C-L is referenced to the edges of the W×W corner square, so an MLIN feeding an
+  MBend stops W/2 short of the corner. (Drawing MLINs corner-to-corner into MBends double-counts every
+  corner square; on a 3-pitch meander at W = 856 µm that was ~44° of phase.)
+- **Angle units.** The engine receives `Angle` in radians, as TLIN's `E` (the elaborator applies
+  `deg` = π/180); the factory converts once for the model's degree-valued API. MBend reads the same key
+  unconverted, which is harmless only because its electrical model ignores the angle.
+- **Artwork** is one `CurveShape` whose two long edges are true arcs (bulge `tan(θ/4)`); EM, DRC and the
+  exporters flatten it to the technology tolerance. At `R = W/2` the inner edge collapses to a point.
+
+**Validation status — stated, not implied.** The rule is the published one and is not yet independently
+confirmed in circuitRF. A planar-MoM S-bend calibration on a 367 µm laminate (W 856 µm, R/W 1–8, against
+equal-centre-line straight lines) gave `R_eff − R` = −0.10W at R/W 1 and −0.03W at R/W 2 — the published
+sign — but **+0.05W, +0.11W, +0.23W at R/W 3, 5, 8, growing with arc length**, with the S-bend's own
+|S11| degrading to −22…−30 dB; conformal boundary cells made both worse. A gentle curve should converge on
+a straight line, so this is read as a tensor-grid artefact on long curved edges, not as physics, and the
+planar kernel is not used as the oracle for R ≥ 3W. A 3D (FEM) check of the same pairs did not converge in
+reasonable time (GMRES > 350 iterations on the first solve, against ~30 for a comparable meander) and was
+stopped. **Outstanding:** a converged 3D or measured comparison at R/W 3–7.
+
 ## 9. Open / deferred
 
 - **Surface-roughness correction** (§2 layer 4) — include or not; decide during implementation and record.

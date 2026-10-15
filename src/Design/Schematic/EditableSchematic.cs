@@ -114,6 +114,8 @@ public static class SymbolPortDefs
             // 90° bend, so wiring to pin 2 is a natural vertical run rather than doubling back
             // horizontally.
             case SymbolKind.MBend:   return [("1", -200f, 0f), ("2", 0f, 200f)];
+            // MCurve: MBend's pins exactly — the same 90° turn, drawn round.
+            case SymbolKind.MCurve:  return [("1", -200f, 0f), ("2", 0f, 200f)];
             // MTee: through line left/right (pins 1/2), branch on the bottom (pin 3) — R-pc-3's own
             // "pin 1 origin, through +X to pin 2, branch +Y to pin 3" convention, mapped onto the
             // schematic canvas with the branch drawn downward (+Y is down in this codebase).

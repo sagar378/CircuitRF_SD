@@ -1670,6 +1670,23 @@
                            Text="{Binding ViewModel.DeembedOutsideValidityDisabledReason}"
                            IsVisible="{Binding ViewModel.DeembedOutsideValidityDisabledReason, Converter={x:Static ObjectConverters.IsNotNull}}"/>
 
+                <!-- ── Conductor thickness - the planar kernel's metal is a zero-thickness sheet, so a
+                     thick strip's sidewall capacitance is missing and Z0 reads high. Off by default so
+                     every existing result is unchanged; see EmSetup.ConductorThicknessCorrection. -->
+                <TextBlock Classes="colhdr" Margin="0,8,0,0" Text="Conductor thickness"/>
+                <CheckBox Name="ConductorThicknessCheck" FontSize="11"
+                          Content="Model copper thickness (grow outlines to the sheet-equivalent width)"
+                          IsChecked="{Binding ViewModel.ConductorThicknessCorrection}"
+                          ToolTip.Tip="The planar solver models metal as a zero-thickness sheet, so the fringing capacitance of a thick strip's sidewalls is missing and Z0 reads high. With this on, every outline on a level with thick copper grows by the width at which a sheet has the same Z0 as the real strip, solved with the 2-D cross-section kernel on this technology's stackup. Port edges stay where they are drawn, and gaps between conductors narrow by the same amount. A level where that would join two conductors is left as drawn, with a warning. The run's notes give the width added and the impedances it was matched on."/>
+
+                <!-- ── LFE - edge ports return through the ground plane (the true edge port). On by default;
+                     off reproduces the pre-LFE series gap. See EmSetup.EdgePortReturn. -->
+                <TextBlock Classes="colhdr" Margin="0,8,0,0" Text="Edge ports"/>
+                <CheckBox Name="GroundedEdgePortsCheck" FontSize="11"
+                          Content="Ground-referenced edge ports (accurate down to low frequency)"
+                          IsChecked="{Binding ViewModel.GroundedEdgePorts}"
+                          ToolTip.Tip="On (the default), an edge port's source sits between the ground plane and the end of the strip, so the port discontinuity is a small series inductance and shunt capacitance at every frequency and the de-embedding stays accurate down to the bottom of the band. Off, the port is the older series gap against the outermost cell, whose de-embedding error grows as 1/f below a few GHz and gets worse as the mesh is refined. Keep it on unless you are reproducing an earlier result."/>
+
                 <!-- ── Dispersion (disabled with a stated reason) ───────────── -->
                 <TextBlock Classes="colhdr" Margin="0,8,0,0" Text="Dispersion"/>
                 <CheckBox Name="DispersionCheck" FontSize="11"

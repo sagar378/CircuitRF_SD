@@ -261,10 +261,48 @@ a run is about to be too big *before* you start it.
 
 ## Solver options {#solver}
 
-Six switches. Four of them either change how the same answer is computed or trade time for memory, and
-change nothing about what is being solved. The two port-de-embedding switches are different in kind and
-are described last: one of them changes the answer, and the other publishes an answer circuitRF would
+Eight switches. Four of them either change how the same answer is computed or trade time for memory, and
+change nothing about what is being solved. **Conductor thickness** changes the geometry the solver is
+handed, and so changes the answer, and **Edge ports** changes what an edge port's source is connected to. The two port-de-embedding switches are different in kind and are
+described last: one of them changes the answer, and the other publishes an answer circuitRF would
 otherwise refuse to write.
+
+**Conductor thickness — "Model copper thickness"** *(off by default)*. The full-wave solver treats metal
+as a **zero-thickness sheet**, so a thick strip's sidewalls, and the fringing capacitance they add, are
+missing and Z₀ reads **high**. With this on, every outline on a level whose copper has a thickness grows
+by the width at which a sheet has the **same Z₀ as the real strip**. That width is solved with the
+cross-section kernel, which models real metal thickness, on your technology's own stackup, at the port
+width (or a typical width of the artwork when the level has no port). **Port edges stay exactly where
+you drew them**, so no reference plane moves. Gaps between conductors on that level narrow by the same
+amount, which stands in for the extra sidewall coupling of thick metal. A level where growing would join
+two conductors, or close a slot inside one, is left as drawn and the run warns you. The run's notes give
+the width added and the impedances it was matched on. One width cannot match ε_eff as well: a thick
+strip's sidewalls are partly in air, so its ε_eff is slightly lower, and the note reports both values.
+
+<div class="callout note">
+<span class="label">How much it moves</span>
+<p>On a 25 µm copper, ~50 Ω line the sheet read about 1 Ω high, and this brought the full-wave answer to
+within 0.1 Ω of the cross-section kernel's thick-metal value. If your full-wave Z₀ disagrees with another
+tool by much more than that, check the <b>stackup heights</b> first. The height between the line and its
+return plane matters far more than thickness. Copper layers between them that carry no artwork count as
+dielectric at their full stated thickness.</p>
+</div>
+
+**Edge ports — "Ground-referenced edge ports"** *(on by default)*. An edge port's source sits between the
+**ground plane** and the end of the strip, which is what an RF port on a microstrip is. The port then adds
+only a small series inductance and shunt capacitance — tens of picohenries and femtofarads on a 50 Ω
+laminate line — and the calibration removes them at every frequency, so the answer stays accurate down
+to the bottom of the sweep and does not move when you refine the mesh. Turned off, the port is the older
+**series gap** against the outermost cell of the strip. Its error grows as 1/f below a few GHz and gets
+**worse** as the mesh is refined: on a 5 mm, 50 Ω line it published a characteristic impedance of about
+1 Ω at 100 MHz where the line is 51.7 Ω. Leave it on unless you are reproducing an earlier result.
+The ground-referenced port is used below the point where the substrate stops being electrically thin
+(the run's quasi-static crossover — about 16 GHz on a 0.37 mm laminate, 3 GHz on 1.6 mm FR-4) and the
+series gap above it, where its low-frequency problem is gone; the run's notes say where it switched.
+A run whose ports are calibrated together as a **coupled group**, or whose calibration standard has to
+reproduce a **neighbouring conductor** beside a feed, uses the series gap for every port and says so in
+its notes; neither calibration has yet been extended to the grounded port. In the
+`.cem` the setting is `"EdgePortReturn": "SeriesGap"`, written only when it is off.
 
 **Vertical (via) kernel — "Integrate G_A^zz directly"** *(off by default)*. Replaces the fitted Green's
 function with direct numerical integration for the one term that couples vias to each other. It costs

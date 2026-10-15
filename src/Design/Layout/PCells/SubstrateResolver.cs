@@ -18,6 +18,8 @@ namespace CircuitRF.Design.Layout.PCells;
 /// thickness-weighting note as <see cref="RelativePermittivity"/>).</param>
 /// <param name="IsStripline">R-pc-10: true when the signal layer has a ground-designated
 /// conductor both above and below it — a microstrip closed form is the wrong model.</param>
+/// <param name="RoughnessRmsMeters">The signal conductor's RMS surface roughness
+/// (<c>StackupLayer.RoughnessRmsM</c>), zero for a smooth conductor.</param>
 public sealed record ResolvedSubstrate(
     LayerKey SignalLayer,
     string SignalConductorName,
@@ -27,7 +29,8 @@ public sealed record ResolvedSubstrate(
     double ThicknessMeters,
     double ConductivitySPerM,
     double LossTangent,
-    bool IsStripline);
+    bool IsStripline,
+    double RoughnessRmsMeters = 0.0);
 
 /// <summary>Why <see cref="SubstrateResolver.ResolveElectrical"/> could not produce a
 /// <see cref="ResolvedSubstrate"/> — always a human-readable sentence naming what is missing, per
@@ -187,7 +190,8 @@ public static partial class SubstrateResolver
             ThicknessMeters: t,
             ConductivitySPerM: signal.SigmaSm,
             LossTangent: tanD,
-            IsStripline: groundOnOtherSide);
+            IsStripline: groundOnOtherSide,
+            RoughnessRmsMeters: signal.RoughnessRmsM ?? 0.0);
 
         return (substrate, null, warn);
     }

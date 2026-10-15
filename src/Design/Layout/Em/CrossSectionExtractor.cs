@@ -300,7 +300,7 @@ public static class CrossSectionExtractor
             [
                 new EmPoint(x0, zBot), new EmPoint(x1, zBot),
                 new EmPoint(x1, zTop), new EmPoint(x0, zTop),
-            ], signal.Layer.SigmaSm));
+            ], signal.Layer.SigmaSm, signal.Layer.RoughnessRmsM ?? 0.0));
 
             conductorReadback.Add(new EmConductorReadback(
                 name, x1 - x0, zTop - zBot, 0.5 * (x0 + x1), zBot, zTop));
@@ -336,7 +336,7 @@ public static class CrossSectionExtractor
         var problem = new EmProblem(
             Conductors:   conductors,
             Regions:      regions,
-            Ground:       haveGround ? new EmGroundPlane(0, groundSigma) : null,
+            Ground:       haveGround ? new EmGroundPlane(0, groundSigma, groundBand?.Layer.RoughnessRmsM ?? 0.0) : null,
             Ports:        ports,
             LengthMeters: Metres((long)Math.Round(lengthDbu)));
 

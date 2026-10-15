@@ -167,13 +167,19 @@ public sealed record Termination
     /// <see cref="TerminationKind.SurfaceImpedance"/>; zero otherwise.</summary>
     public double ThicknessM { get; }
 
+    /// <summary>RMS roughness of the plane's upper (return-current) face, metres. Only meaningful for
+    /// <see cref="TerminationKind.SurfaceImpedance"/>; zero means smooth and is the pre-roughness
+    /// behaviour bit for bit. See <see cref="ConductorRoughness"/>.</summary>
+    public double RoughnessRmsM { get; }
+
     private Termination(TerminationKind kind, EmMaterial material,
-                        double conductivitySm = 0, double thicknessM = 0)
+                        double conductivitySm = 0, double thicknessM = 0, double roughnessRmsM = 0)
     {
         Kind           = kind;
         Material       = material;
         ConductivitySm = conductivitySm;
         ThicknessM     = thicknessM;
+        RoughnessRmsM  = roughnessRmsM;
     }
 
     public static Termination Pec => new(TerminationKind.Pec, EmMaterial.Air);
@@ -195,8 +201,8 @@ public sealed record Termination
     /// lesson, one file over: when a new code path is added beside an old one for the same physical
     /// case, the question is whether the old path is still TAKEN.</para>
     /// </summary>
-    public static Termination LossyGround(double sigmaSm, double thicknessM) =>
-        new(TerminationKind.SurfaceImpedance, EmMaterial.Air, sigmaSm, thicknessM);
+    public static Termination LossyGround(double sigmaSm, double thicknessM, double roughnessRmsM = 0) =>
+        new(TerminationKind.SurfaceImpedance, EmMaterial.Air, sigmaSm, thicknessM, roughnessRmsM);
 
     public bool IsOpen => Kind == TerminationKind.HalfSpace;
 
@@ -241,17 +247,21 @@ public sealed record Termination
     /// (σ ≤ 0, σ = +∞, t ≤ 0), on <see cref="PlanarSurfaceImpedance"/>'s own three-spelling rule.
     /// That zero is what every PEC-reduction gate in CL4 rests on.</para>
     /// </summary>
-    public Complex SurfaceImpedanceAt(double omegaRadS) =>
-        Kind == TerminationKind.SurfaceImpedance
-            ? PlanarSurfaceImpedance.Plane(ConductivitySm, ThicknessM, omegaRadS)
-            : Complex.Zero;
+    public Complex SurfaceImpedanceAt(double omegaRadS)
+    {
+        if (Kind != TerminationKind.SurfaceImpedance) return Complex.Zero;
+        var zs = PlanarSurfaceImpedance.Plane(ConductivitySm, ThicknessM, omegaRadS);
+        // A smooth plane skips the multiply, so its Z_s is the pre-roughness value bit for bit.
+        return RoughnessRmsM > 0 ? zs * ConductorRoughness.Factor(RoughnessRmsM, ConductivitySm, omegaRadS) : zs;
+    }
 
     public override string ToString() => Kind switch
     {
         TerminationKind.Pec              => "PEC",
         TerminationKind.Pmc              => "PMC",
         TerminationKind.SurfaceImpedance =>
-            $"conducting plane σ={ConductivitySm:G4} S/m, t={ThicknessM * 1e6:G4} µm",
+            $"conducting plane σ={ConductivitySm:G4} S/m, t={ThicknessM * 1e6:G4} µm" +
+            (RoughnessRmsM > 0 ? $", roughness {RoughnessRmsM * 1e6:G4} µm RMS" : ""),
         _                                => $"half-space εᵣ={Material.EpsR:G4}",
     };
 }

@@ -1050,6 +1050,23 @@ public sealed class CemFile
     public bool?   AcceleratedSolve      { get; set; }
 
     /// <summary>
+    /// The planar run's conductor-thickness correction (<c>PlanarThicknessCorrection</c>) — <b>null
+    /// means off</b>, which is what every <c>.cem</c> written before it existed means. Same nullable +
+    /// omit-at-default rule as <see cref="AcceleratedSolve"/>, so such a file loads AND re-serialises
+    /// byte-identically.
+    /// </summary>
+    public bool?   ConductorThicknessCorrection { get; set; }
+
+    /// <summary>
+    /// LFE — the planar edge port's return (<c>EmSetup.EdgePortReturn</c>). <b>Null means the
+    /// default</b> (<c>Ground</c>), and is what every file written before LFE carries — which means an
+    /// older file now runs the grounded port. That is the point of LFE rather than an accident of it:
+    /// the series gap's low-frequency error is a defect, not a preference a file chose. A file can
+    /// still ask for <c>"SeriesGap"</c> to reproduce a pre-LFE result.
+    /// </summary>
+    public PlanarEdgePortReturn? EdgePortReturn { get; set; }
+
+    /// <summary>
     /// ANT-12's radiation pattern — <b>null means off</b>, which is what every <c>.cem</c> written
     /// before the far field was reachable means. Same nullable + omit-at-default rule as
     /// <see cref="AcceleratedSolve"/> directly above, so such a file loads AND re-serialises
@@ -1238,6 +1255,8 @@ public static class EmSetupPersistence
         ResonanceSearch       = s.ResonanceSearch ? true : null,
         DirectVerticalKernel  = s.DirectVerticalKernel ? true : null,
         AcceleratedSolve      = s.AcceleratedSolve ? true : null,
+        ConductorThicknessCorrection = s.ConductorThicknessCorrection ? true : null,
+        EdgePortReturn        = s.EdgePortReturn == EmSetup.DefaultEdgePortReturn ? null : s.EdgePortReturn,
         DeembedOutsideCalibrationValidity =
             s.DeembedOutsideCalibrationValidity ? true : null,
         RadiationPattern      = s.RadiationPattern ? true : null,
@@ -1329,6 +1348,8 @@ public static class EmSetupPersistence
         ResonanceSearch       = f.ResonanceSearch ?? false,
         DirectVerticalKernel  = f.DirectVerticalKernel ?? false,
         AcceleratedSolve      = f.AcceleratedSolve ?? false,
+        ConductorThicknessCorrection = f.ConductorThicknessCorrection ?? false,
+        EdgePortReturn        = f.EdgePortReturn ?? EmSetup.DefaultEdgePortReturn,
         LegacyRawSolveRequested = f.Deembed == false,
         DeembedOutsideCalibrationValidity = f.DeembedOutsideCalibrationValidity ?? false,
         RadiationPattern      = f.RadiationPattern ?? false,

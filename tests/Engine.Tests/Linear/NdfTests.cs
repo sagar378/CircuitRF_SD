@@ -915,6 +915,9 @@ public sealed class NdfTests(ITestOutputHelper output)
         ["TLineModel"]            = Activity.Passive,
         ["MicrostripLineModel"]   = Activity.Passive,
         ["MicrostripBendModel"]   = Activity.Passive,
+        // MCURVE is an MLIN over an effective length and stamps through one, so it is passive for
+        // exactly MLIN's reason — "the microstrips" row of stability-wsprobe.md §11.3.
+        ["MicrostripCurveModel"]  = Activity.Passive,
         ["MicrostripTeeModel"]    = Activity.Passive,
         ["MicrostripCrossModel"]  = Activity.Passive,
         ["MicrostripTaperModel"]  = Activity.Passive,

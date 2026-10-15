@@ -350,6 +350,36 @@ public sealed class EmSetup
     public bool AcceleratedSolve { get; set; }
 
     /// <summary>
+    /// <b>Model the conductor's real thickness in a PLANAR run.</b> The planar kernel's metal is a
+    /// zero-thickness sheet, so it has no sidewalls: the fringing capacitance a thick strip adds is
+    /// missing and Z0 reads high (measured: a 25 µm copper 50 Ω line read 54.4 Ω where a 3D solve and
+    /// the closed-form models read 49.7-50.0 Ω). On, every conductor outline on a level whose copper is
+    /// thick is grown by the width at which a sheet has the SAME Z0 as the real thick strip, found from
+    /// the 2-D cross-section kernel on this technology's own stackup; port edges stay where they are
+    /// drawn. See <c>PlanarThicknessCorrection</c>. <b>Off by default</b>, so every existing result is
+    /// bit-identical — the conformal-cells precedent: flipping a default that moves every planar answer
+    /// is its own deliberate act. A cross-section (kernel A) or 3D run models real thickness already and
+    /// ignores this.
+    /// </summary>
+    public bool ConductorThicknessCorrection { get; set; }
+
+    /// <summary>
+    /// <b>LFE — what a planar EDGE port's source returns through.</b> <c>Ground</c> (the default) is
+    /// the true edge port: the source sits between the ground plane and the strip's end, so the port
+    /// discontinuity stays a small series inductance and shunt capacitance at every frequency and the
+    /// de-embedding stays well conditioned down to the bottom of the band. <c>SeriesGap</c> is the
+    /// pre-LFE port — a delta gap against the floating outermost cell, whose series capacitance made
+    /// the de-embedding error grow as 1/f (measured on a 5 mm 50 Ω laminate line: Zc 0.9 Ω and
+    /// εeff 1e-4 at 100 MHz where the field solve itself reads 51.7 Ω / 2.46) and worsen as the mesh
+    /// was refined. Kept so a pre-LFE result can be reproduced.
+    /// </summary>
+    public PlanarEdgePortReturn EdgePortReturn { get; set; } = DefaultEdgePortReturn;
+
+    /// <summary>The default <see cref="EdgePortReturn"/>, stated once so the model, the
+    /// <c>.cem</c> omit-at-default rule and the provenance hash cannot disagree.</summary>
+    public const PlanarEdgePortReturn DefaultEdgePortReturn = PlanarEdgePortReturn.Ground;
+
+    /// <summary>
     /// <b>ANT-12 — the radiation pattern, OFF by default, and the first user-reachable switch the far
     /// field has ever had.</b> Planar kernel only.
     ///
@@ -562,6 +592,8 @@ public sealed class EmSetup
         if (ResonanceSearch)                                     set.Add("ResonanceSearch");
         if (DirectVerticalKernel)                                set.Add("DirectVerticalKernel");
         if (AcceleratedSolve)                                    set.Add("AcceleratedSolve");
+        if (ConductorThicknessCorrection)                        set.Add("ConductorThicknessCorrection");
+        if (EdgePortReturn != DefaultEdgePortReturn)             set.Add("EdgePortReturn");
         // brief-em3d-31 — RadiationPattern is read by a driven 3D run too, so it is not planar-only;
         // a static or eigenmode 3D setup says so through Em3dRunService.RadiationPatternIgnored.
         if (DeembedOutsideCalibrationValidity)                   set.Add("DeembedOutsideCalibrationValidity");
@@ -588,6 +620,8 @@ public sealed class EmSetup
         ResonanceSearch        = ResonanceSearch,
         DirectVerticalKernel   = DirectVerticalKernel,
         AcceleratedSolve       = AcceleratedSolve,
+        ConductorThicknessCorrection = ConductorThicknessCorrection,
+        EdgePortReturn         = EdgePortReturn,
         LegacyRawSolveRequested = LegacyRawSolveRequested,
         DeembedOutsideCalibrationValidity = DeembedOutsideCalibrationValidity,
         RadiationPattern       = RadiationPattern,
@@ -615,5 +649,6 @@ public sealed class EmSetup
                subjectDescription ?? (LayoutRef is { Length: > 0 } l ? l : null),
                PortZ0s.Count > 0 ? [.. PortZ0s] : null,
                AnalysisLevelNames.Count > 0 ? [.. AnalysisLevelNames] : null,
-               GroundStackupLayerName is { Length: > 0 } g ? g : null);
+               GroundStackupLayerName is { Length: > 0 } g ? g : null,
+               ConductorThicknessCorrection);
 }

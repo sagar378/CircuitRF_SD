@@ -3359,3 +3359,25 @@ in `Devices/ViaFormulas.cs` with its source.
 
 Gates: `tests/Core.Tests/Devices/ViaFormulasTests.cs`, `tests/Engine.Tests/Devices/ViaSParamTests.cs`
 (hand-built RLC T to 1e-9, the Palace comparison, the one warning).
+
+## MCURVE — the radiused microstrip bend (2026-10-11)
+
+Owner request: a curved (smooth) bend in the library; until now MBEND, a corner, was the only bend.
+Physics, sources and validation status are in `docs/design/microstrip-models.md` §10.5. Three things
+worth knowing that the code alone does not make obvious:
+
+- **An angle reaches a model in RADIANS whenever the netlist states its unit.** `Units.Scale("deg")`
+  is π/180, so `Angle=90 deg` arrives as π/2 — TLIN's `E` documents exactly this. MCURVE's factory
+  first read it as degrees and stamped a 5 mm curve as ~0.1 mm of line; the end-to-end CLI comparison
+  against an MLIN of the effective length caught it (|ΔS| 0.93 → 0.0 after the fix). **MBEND reads the
+  same key unconverted** and is unaffected only because its L-C-L ignores the angle — anything that
+  starts using MBEND's angle electrically inherits the trap. PCells are the deliberate exception: they
+  receive degrees (`SchematicToLayoutGenerator.TryResolveSiValue`).
+- **MBEND's reference planes are the edges of the W×W corner square, not the corner point.** An MLIN
+  feeding it stops W/2 short of the corner. Drawing meander MLINs corner-to-corner double-counts each
+  square: on a 3-pitch, 8-bend meander at W = 856 µm the schematic read 140° where EM read 92°, and the
+  edge convention brought a short-legged meander to within 0.4° of EM. MCURVE's planes are the arc
+  ends, so it abuts an MLIN with nothing to subtract.
+- **MCURVE is an MLIN, not a copy of one.** It constructs `MicrostripLineModel` over `(R − 0.2W)·|θ|`;
+  the stamps are gated bit for bit against an MLIN built at that length
+  (`MicrostripCurveModelTests.Stamps_AreExactlyAnMlinOfTheEffectiveLength`).

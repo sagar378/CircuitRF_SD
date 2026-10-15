@@ -84,7 +84,10 @@ public sealed class PlanarKernel
     /// <para>Kernel A has no such token: nothing in this series touched it, and giving it one would
     /// mark every cross-section <c>.snp</c> stale to record nothing.</para>
     /// </summary>
-    public const string ModelRevision = "conductor-and-ground-loss-2026-09-14";
+    // LFE (2026-10-14): the shipped edge port now returns through the ground plane (EmSetup's
+    // default EdgePortReturn), which moves every de-embedded planar answer — at the bottom of a band
+    // by a great deal. The engine's own default stays SeriesGap, so engine-level numbers did not move.
+    public const string ModelRevision = "grounded-edge-port-2026-10-14";
 
     /// <summary>The diagnostics group D4 adds. <b>Not "tline"</b> — kernel A's eight scalars are
     /// per-unit-length properties of a uniform line, and a planar structure has none; overloading the

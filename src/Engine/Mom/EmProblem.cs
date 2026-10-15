@@ -67,14 +67,17 @@ public sealed record EmDielectricRegion(double YBottom, double YTop, EmMaterial 
 /// A closed, simple polygon in the cross-section plane with finite thickness (R-mom-4 — never a
 /// zero-thickness sheet). The outline is not required to be wound CCW on input; the mesher
 /// normalises the winding so the outward normal is well defined.
+/// <para><c>RoughnessRmsM</c> is the metal's RMS surface roughness in metres; zero is smooth and is the
+/// pre-roughness answer bit for bit (<see cref="ConductorRoughness"/>).</para>
 /// </summary>
-public sealed record EmConductor(string Name, IReadOnlyList<EmPoint> Outline, double SigmaSm);
+public sealed record EmConductor(string Name, IReadOnlyList<EmPoint> Outline, double SigmaSm,
+                                 double RoughnessRmsM = 0.0);
 
 /// <summary>
 /// Laterally infinite perfect/lossy plane at y = <paramref name="Y"/>. Handled by an exact image
 /// (R-mom-7), never meshed. <c>SigmaSm = double.PositiveInfinity</c> means a perfect conductor.
 /// </summary>
-public sealed record EmGroundPlane(double Y, double SigmaSm);
+public sealed record EmGroundPlane(double Y, double SigmaSm, double RoughnessRmsM = 0.0);
 
 /// <summary>
 /// A transmission-line port. <c>ReferenceConductor == null</c> means "the ground plane". Kernel W
